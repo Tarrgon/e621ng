@@ -14,7 +14,7 @@ PostSearch.initialize_input = function ($form) {
     .on("keypress", function (event) {
       if (event.which !== 13 || event.shiftKey) return;
       event.preventDefault();
-      $textarea.closest("form").submit();
+      $textarea.closest("form").trigger("submit");
     });
 
   $(window).on("resize", recalculateInputHeight);
@@ -71,7 +71,7 @@ PostSearch.initialize_controls = function () {
   let stickySearch = LStorage.Posts.StickySearch;
   $("#search-sticky").on("click", () => {
     stickySearch = !stickySearch;
-    $("body").attr("data-st-ssearch", stickySearch);
+    $("body").attr("data-st-stickysearch", stickySearch);
     LStorage.Posts.StickySearch = stickySearch;
   });
 };
