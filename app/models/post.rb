@@ -36,9 +36,10 @@ class Post < ApplicationRecord
   after_save :create_version
   after_save :update_parent_on_save
   after_save :apply_post_metatags
-  after_commit :delete_files, :on => :destroy
-  after_commit :remove_iqdb_async, :on => :destroy
-  after_commit :update_iqdb_async, :on => :create
+  after_commit :delete_files, on: :destroy
+  after_commit :remove_iqdb_async, on: :destroy
+  # after_commit :update_iqdb_async, :on => :create
+  after_commit :handle_thumbnails_on_create, on: :create
   after_commit :generate_image_samples, on: :create
   after_commit :generate_video_samples, on: :create, if: :is_video?
 
@@ -120,9 +121,9 @@ class Post < ApplicationRecord
       sample_url
     end
 
-    def sample_url
+    def sample_url(type = :sample_jpg)
       return file_url unless has_sample?
-      storage_manager.post_file_url(self, :sample)
+      storage_manager.post_file_url(self, type)
     end
 
     def preview_file_url(type = :preview_jpg)
@@ -333,6 +334,11 @@ class Post < ApplicationRecord
       else
         generate_image_samples
       end
+    end
+
+    def handle_thumbnails_on_create
+      ImageSampler.generate_post_images(self)
+      update_iqdb_async if has_preview?
     end
   end
 
@@ -1205,7 +1211,7 @@ class Post < ApplicationRecord
 
   module PoolMethods
     def pool_ids
-      pool_string.scan(/pool\:(\d+)/).map {|pool| pool[0].to_i}
+      pool_string.scan(/pool:(\d+)/).map { |pool| pool[0].to_i }
     end
 
     def pools
@@ -1635,7 +1641,7 @@ class Post < ApplicationRecord
         fav_count: fav_count,
         is_favorited: favorited_by?(CurrentUser.user.id),
 
-        pools: pool_ids,
+        pools: pool_ids.join(" "),
       }
 
       if visible?
