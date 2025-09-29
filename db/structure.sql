@@ -1007,13 +1007,15 @@ CREATE TABLE public.mascots (
     display_name character varying NOT NULL,
     md5 character varying NOT NULL,
     file_ext character varying NOT NULL,
-    background_color character varying NOT NULL,
+    background_color character varying DEFAULT '#012e57'::character varying NOT NULL,
     artist_url character varying NOT NULL,
     artist_name character varying NOT NULL,
     active boolean DEFAULT true NOT NULL,
     created_at timestamp(6) without time zone NOT NULL,
     updated_at timestamp(6) without time zone NOT NULL,
-    available_on character varying[] DEFAULT '{}'::character varying[] NOT NULL
+    available_on character varying[] DEFAULT '{}'::character varying[] NOT NULL,
+    foreground_color character varying DEFAULT '#0f0f0f80'::character varying NOT NULL,
+    is_layered boolean DEFAULT false NOT NULL
 );
 
 
@@ -1742,6 +1744,38 @@ CREATE TABLE public.schema_migrations (
 
 
 --
+-- Name: settings; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.settings (
+    id bigint NOT NULL,
+    var character varying NOT NULL,
+    value text,
+    created_at timestamp(6) without time zone NOT NULL,
+    updated_at timestamp(6) without time zone NOT NULL
+);
+
+
+--
+-- Name: settings_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.settings_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: settings_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.settings_id_seq OWNED BY public.settings.id;
+
+
+--
 -- Name: staff_audit_logs; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -2088,13 +2122,14 @@ ALTER SEQUENCE public.tickets_id_seq OWNED BY public.tickets.id;
 
 CREATE TABLE public.upload_whitelists (
     id bigint NOT NULL,
-    pattern character varying NOT NULL,
     note character varying,
     reason character varying,
     allowed boolean DEFAULT true NOT NULL,
     hidden boolean DEFAULT false NOT NULL,
     created_at timestamp without time zone NOT NULL,
-    updated_at timestamp without time zone NOT NULL
+    updated_at timestamp without time zone NOT NULL,
+    domain character varying,
+    path character varying DEFAULT '\/.+'::character varying
 );
 
 
@@ -2767,6 +2802,13 @@ ALTER TABLE ONLY public.posts ALTER COLUMN change_seq SET DEFAULT nextval('publi
 
 
 --
+-- Name: settings id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.settings ALTER COLUMN id SET DEFAULT nextval('public.settings_id_seq'::regclass);
+
+
+--
 -- Name: staff_audit_logs id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -3263,6 +3305,14 @@ ALTER TABLE ONLY public.schema_migrations
 
 
 --
+-- Name: settings settings_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.settings
+    ADD CONSTRAINT settings_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: staff_audit_logs staff_audit_logs_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -3740,6 +3790,20 @@ CREATE INDEX index_edit_histories_on_user_id ON public.edit_histories USING btre
 --
 
 CREATE INDEX index_edit_histories_on_versionable_id_and_versionable_type ON public.edit_histories USING btree (versionable_id, versionable_type);
+
+
+--
+-- Name: index_exception_logs_on_code; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_exception_logs_on_code ON public.exception_logs USING btree (code);
+
+
+--
+-- Name: index_exception_logs_on_user_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_exception_logs_on_user_id ON public.exception_logs USING btree (user_id);
 
 
 --
@@ -4255,6 +4319,13 @@ CREATE INDEX index_posts_on_uploader_ip_addr ON public.posts USING btree (upload
 
 
 --
+-- Name: index_settings_on_var; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX index_settings_on_var ON public.settings USING btree (var);
+
+
+--
 -- Name: index_staff_audit_logs_on_user_id; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -4693,6 +4764,14 @@ ALTER TABLE ONLY public.post_events
 
 
 --
+-- Name: exception_logs fk_rails_c720bf523c; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.exception_logs
+    ADD CONSTRAINT fk_rails_c720bf523c FOREIGN KEY (user_id) REFERENCES public.users(id);
+
+
+--
 -- Name: avoid_postings fk_rails_cccc6419c8; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -4731,6 +4810,11 @@ ALTER TABLE ONLY public.staff_notes
 SET search_path TO "$user", public;
 
 INSERT INTO "schema_migrations" (version) VALUES
+('20250921011208'),
+('20250831040648'),
+('20250831015612'),
+('20250830192056'),
+('20250826165528'),
 ('20250611041221'),
 ('20250604020028'),
 ('20250512221037'),

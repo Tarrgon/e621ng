@@ -44,7 +44,7 @@ class User < ApplicationRecord
     _has_saved_searches
     can_approve_posts
     can_upload_free
-    disable_cropped_thumbnails
+    _disable_cropped_thumbnails
     _disable_mobile_gestures
     enable_safe_mode
     disable_responsive_mode
@@ -116,6 +116,7 @@ class User < ApplicationRecord
   has_many :post_votes
   has_many :staff_notes, -> { active.order("staff_notes.id desc") }
   has_many :user_name_change_requests, -> { order(id: :asc) }
+  has_many :artists, foreign_key: "linked_user"
 
   belongs_to :avatar, class_name: 'Post', optional: true
   accepts_nested_attributes_for :dmail_filter
@@ -398,7 +399,7 @@ class User < ApplicationRecord
     def is_blacklisting_user?(user)
       return false if blacklisted_tags.blank?
       bltags = blacklisted_tags.split("\n").map(&:downcase)
-      strings = %W[user:#{user.name.downcase} user:!#{user.id} userid:#{user.id}]
+      strings = %W[user:#{user.name.downcase} user:!#{user.id} username:#{user.name.downcase} userid:#{user.id}]
       strings.any? { |str| bltags.include?(str) }
     end
   end
@@ -661,7 +662,7 @@ class User < ApplicationRecord
         :id, :created_at, :name, :level, :base_upload_limit,
         :post_upload_count, :post_update_count, :note_update_count,
         :is_banned, :can_approve_posts, :can_upload_free,
-        :level_string, :avatar_id
+        :level_string, :avatar_id, :is_verified?,
       ]
 
       if id == CurrentUser.user.id
@@ -672,7 +673,7 @@ class User < ApplicationRecord
           enable_keyboard_navigation enable_privacy_mode
           style_usernames enable_auto_complete
           can_approve_posts can_upload_free
-          disable_cropped_thumbnails enable_safe_mode
+          enable_safe_mode
           disable_responsive_mode no_flagging disable_user_dmails
           enable_compact_uploader replacements_beta forum_notification_dot
         ]
@@ -842,7 +843,6 @@ class User < ApplicationRecord
 
     def search(params)
       q = super
-      q = q.joins(:user_status)
 
       q = q.attribute_matches(:level, params[:level])
 
@@ -874,33 +874,37 @@ class User < ApplicationRecord
       bitprefs_include = nil
       bitprefs_exclude = nil
 
-      [:can_approve_posts, :can_upload_free].each do |x|
-        if params[x].present?
-          attr_idx = BOOLEAN_ATTRIBUTES.index(x.to_s)
-          if params[x].to_s.truthy?
-            bitprefs_include ||= "0"*bitprefs_length
-            bitprefs_include[attr_idx] = '1'
-          elsif params[x].to_s.falsy?
-            bitprefs_exclude ||= "0"*bitprefs_length
-            bitprefs_exclude[attr_idx] = '1'
-          end
+      %i[can_approve_posts can_upload_free].each do |x|
+        next if params[x].blank?
+        attr_idx = BOOLEAN_ATTRIBUTES.index(x.to_s)
+        if params[x].to_s.truthy?
+          bitprefs_include ||= "0" * bitprefs_length
+          bitprefs_include[attr_idx] = "1"
+        elsif params[x].to_s.falsy?
+          bitprefs_exclude ||= "0" * bitprefs_length
+          bitprefs_exclude[attr_idx] = "1"
         end
       end
 
       if bitprefs_include
         bitprefs_include.reverse!
-        q = q.where("bit_prefs::bit(:len) & :bits::bit(:len) = :bits::bit(:len)",
-                    {:len => bitprefs_length, :bits => bitprefs_include})
+        q = q.where("bit_prefs::bit(#{bitprefs_length}) & :bits::bit(#{bitprefs_length}) = :bits::bit(#{bitprefs_length})",
+                    { bits: bitprefs_include })
       end
 
       if bitprefs_exclude
         bitprefs_exclude.reverse!
-        q = q.where("bit_prefs::bit(:len) & :bits::bit(:len) = 0::bit(:len)",
-                    {:len => bitprefs_length, :bits => bitprefs_exclude})
+        q = q.where("bit_prefs::bit(#{bitprefs_length}) & :bits::bit(#{bitprefs_length}) = 0::bit(#{bitprefs_length})",
+                    { bits: bitprefs_exclude })
       end
 
       if params[:ip_addr].present?
         q = q.where("last_ip_addr <<= ?", params[:ip_addr])
+      end
+
+      # Check if the join is necessary
+      if params[:order].present? && %w[post_upload_count note_count post_update_count].include?(params[:order])
+        q = q.joins(:user_status)
       end
 
       case params[:order]

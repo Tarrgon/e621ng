@@ -31,6 +31,12 @@
   color: $button-text-color;
   &:hover, &:active { background: $button-background-hover; }
 
+  // Overriding the default outline
+  &:focus {
+    outline: none !important;
+    background-color: themed("color-section-lighten-10");
+  }
+
   & > svg {
     // Icon should be slightly larger than text,
     // with padding to fill the entire button height
@@ -73,6 +79,33 @@
     background-color: themed("color-link-active");
     color: palette("plain-black");
   }
+
+  // Elements that look like physical buttons and animate on click.
+  &.kinetic {
+    $kinetic-shadow: 0.25rem;
+    $kinetic-active: $kinetic-shadow / 2;
+
+    box-shadow: 0 $kinetic-shadow themed("color-section");
+    position: relative;
+    &:active, &[processing="true"].anim {
+      translate: 0 $kinetic-active;
+      box-shadow: 0 $kinetic-active themed("color-section");
+
+      // Cursed solution for a cursed problem.
+      // Moving the button down when active caused the javascript event to not trigger if the
+      // top 0.125rem of the button was clicked. The solution is to add an invisible element
+      // that covers that gap.
+      &::before {
+        content: "";
+        position: absolute;
+        background: transparent;
+        height: $kinetic-shadow;
+        top: -$kinetic-active;
+        left: 0;
+        right: 0;
+      }
+    }
+  }
 }
 
 
@@ -89,6 +122,19 @@
   &:hover, &:active {
     background: themed("color-tag-artist-alt");
   }
+
+  &[disabled] {
+    background: palette("background-grey");
+    color: palette("text-lighten-20");
+    cursor: not-allowed;
+  }
+}
+
+
+// Link fixes
+a.st-button {
+  color: inherit;     // Prevent links from using the wrong color
+  user-select: none;  // Avoid accidentally selecting the button text
 }
 
 

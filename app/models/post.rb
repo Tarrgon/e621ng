@@ -505,9 +505,8 @@ class Post < ApplicationRecord
         src = src.try(:strip)
         alternate = Sources::Alternates.find(src)
         alternate_processors << alternate
-        gallery_sources << alternate.gallery_url if alternate.gallery_url
         submission_sources << alternate.submission_url if alternate.submission_url
-        direct_sources << alternate.submission_url if alternate.direct_url
+        direct_sources << alternate.direct_url if alternate.direct_url
         additional_sources += alternate.additional_urls if alternate.additional_urls
         alternate.original_url
       end
@@ -516,7 +515,8 @@ class Post < ApplicationRecord
         sources = alt_processor.remove_duplicates(sources)
       end
 
-      self.source = sources.first(10).join("\n")
+      # Truncate sources to prevent abuse
+      self.source = sources.map { |s| s[0..2048] }.first(10).join("\n")
     end
 
     def copy_sources_to_parent
@@ -778,9 +778,9 @@ class Post < ApplicationRecord
     end
 
     def add_automatic_tags(tags)
-      return tags if !Danbooru.config.enable_dimension_autotagging?
+      return tags unless Danbooru.config.enable_dimension_autotagging?
 
-      tags -= %w[thumbnail low_res hi_res absurd_res superabsurd_res huge_filesize flash webm mp4 wide_image long_image]
+      tags -= %w[thumbnail low_res hi_res absurd_res superabsurd_res huge_filesize wide_image tall_image long_image flash webm mp4 long_playtime short_playtime]
 
       if has_dimensions?
         tags << "superabsurd_res" if image_width >= 10_000 && image_height >= 10_000
@@ -798,27 +798,19 @@ class Post < ApplicationRecord
         end
       end
 
-      if file_size >= 30.megabytes
-        tags << "huge_filesize"
-      end
+      tags << "huge_filesize" if file_size >= 30.megabytes
 
-      if is_flash?
-        tags << "flash"
-      end
+      tags << "flash" if is_flash?
+      tags << "webm" if is_webm?
 
-      if is_webm?
-        tags << "webm"
-      end
+      tags << "long_playtime" if is_video? && duration >= 30
+      tags << "short_playtime" if is_video? && duration < 30
 
-      unless is_gif?
-        tags -= ["animated_gif"]
-      end
+      # TODO: Automatically add animated_* tags without re-testing them on every edit
+      tags -= ["animated_gif"] unless is_gif?
+      tags -= ["animated_png"] unless is_png?
 
-      unless is_png?
-        tags -= ["animated_png"]
-      end
-
-      return tags
+      tags
     end
 
     def apply_casesensitive_metatags(tags)
