@@ -10,13 +10,6 @@ export { default as $ } from "jquery";
 import Rails from "@rails/ujs";
 Rails.start();
 
-require("jquery-ui/ui/widgets/sortable");
-require("jquery-ui/ui/widgets/resizable");
-require("jquery-ui/themes/base/core.css");
-require("jquery-ui/themes/base/sortable.css");
-require("jquery-ui/themes/base/resizable.css");
-require("jquery-ui/themes/base/theme.css");
-
 require("../src/styles/base.scss");
 
 // Utilities
@@ -24,6 +17,7 @@ export { default as LStorage } from "../src/javascripts/utility/storage.js";
 export { default as TaskQueue } from "../src/javascripts/utility/task_queue.js";
 export { default as Hotkeys } from "../src/javascripts/hotkeys.js";
 export { default as Dialog } from "../src/javascripts/utility/dialog.js";
+export { default as SVGIcon } from "../src/javascripts/utility/svg_icon.js";
 
 // Models
 importAll(require.context("../src/javascripts/models", true, /\.js(\.erb)?$/));
@@ -39,7 +33,7 @@ export { default as Autocomplete } from "../src/javascripts/autocomplete.js";
 export { default as Blacklist } from "../src/javascripts/blacklists.js";
 export { default as Blip } from "../src/javascripts/blips.js";
 export { default as Comment } from "../src/javascripts/comments.js";
-export { default as DText } from "../src/javascripts/dtext.js";
+export { default as DTextFormatter } from "../src/javascripts/dtext_formatter.js";
 export { default as FurID } from "../src/javascripts/furid.js";
 export { default as ModAction } from "../src/javascripts/mod_actions.js";
 export { default as Note } from "../src/javascripts/notes.js";

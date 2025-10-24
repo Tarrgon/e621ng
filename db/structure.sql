@@ -3800,6 +3800,13 @@ CREATE INDEX index_exception_logs_on_code ON public.exception_logs USING btree (
 
 
 --
+-- Name: index_exception_logs_on_created_at; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_exception_logs_on_created_at ON public.exception_logs USING btree (created_at);
+
+
+--
 -- Name: index_exception_logs_on_user_id; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -4294,6 +4301,13 @@ CREATE UNIQUE INDEX index_posts_on_md5 ON public.posts USING btree (md5);
 --
 
 CREATE INDEX index_posts_on_parent_id ON public.posts USING btree (parent_id);
+
+
+--
+-- Name: index_posts_on_pool_string_tokens; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_posts_on_pool_string_tokens ON public.posts USING gin (string_to_array(pool_string, ' '::text));
 
 
 --
@@ -4831,6 +4845,8 @@ ALTER TABLE ONLY public.staff_notes
 SET search_path TO "$user", public;
 
 INSERT INTO "schema_migrations" (version) VALUES
+('20251014151300'),
+('20251010171207'),
 ('20251001213309'),
 ('20250921011208'),
 ('20250831040648'),

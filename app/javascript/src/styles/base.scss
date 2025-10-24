@@ -23,7 +23,6 @@
 @import "common/comment_container";
 @import "common/diffs.scss";
 @import "common/dtext.scss";
-@import "common/dtext_input.scss";
 @import "common/forms.scss";
 @import "common/inline.scss";
 @import "common/jquery_ui_custom.scss";
@@ -45,8 +44,10 @@
 
 @import "views/application/application";
 @import "views/artists/artists";
+@import "views/help/help";
 @import "views/maintenance/maintenance";
 @import "views/mascots/mascots";
+@import "views/pools/pools";
 @import "views/post_flags/post_flags";
 @import "views/posts/posts";
 @import "views/static/static";
