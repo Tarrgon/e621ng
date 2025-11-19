@@ -169,14 +169,14 @@ class User < ApplicationRecord
 
       def name_or_id_to_id(name)
         if name =~ /\A!\d+\z/
-          return name[1..-1].to_i
+          return ParseValue.safe_id(name[1..-1])
         end
         User.name_to_id(name)
       end
 
       def name_or_id_to_id_forced(name)
         if name =~ /\A\d+\z/
-          return name.to_i
+          return ParseValue.safe_id(name)
         end
         User.name_to_id(name)
       end
@@ -279,9 +279,16 @@ class User < ApplicationRecord
       end
 
       def authenticate_api_key(name, api_key)
-        key = ApiKey.where(:key => api_key).first
+        # Validate inputs: PostgreSQL expects UTF-8
+        return nil unless name.is_a?(String) && name.dup.force_encoding("UTF-8").valid_encoding?
+        return nil unless api_key.is_a?(String) && api_key.dup.force_encoding("UTF-8").valid_encoding?
+        return nil if name.blank? || api_key.blank?
+
+        key = ApiKey.where(key: api_key).first
         return nil if key.nil?
-        user = find_by_name(name)
+
+        # The find_by(name: name) will not use an index correctly
+        user = find_by_name(name) # rubocop:disable Rails/DynamicFindBy
         return nil if user.nil?
         return user if key.user_id == user.id
         nil
@@ -720,23 +727,23 @@ class User < ApplicationRecord
 
   module CountMethods
     def wiki_page_version_count
-      user_status.wiki_edit_count
+      user_status&.wiki_edit_count || 0
     end
 
     def post_update_count
-      user_status.post_update_count
+      user_status&.post_update_count || 0
     end
 
     def post_upload_count
-      user_status.post_count
+      user_status&.post_count || 0
     end
 
     def post_deleted_count
-      user_status.post_deleted_count
+      user_status&.post_deleted_count || 0
     end
 
     def note_version_count
-      user_status.note_count
+      user_status&.note_count || 0
     end
 
     def note_update_count
@@ -744,31 +751,31 @@ class User < ApplicationRecord
     end
 
     def artist_version_count
-      user_status.artist_edit_count
+      user_status&.artist_edit_count || 0
     end
 
     def pool_version_count
-      user_status.pool_edit_count
+      user_status&.pool_edit_count || 0
     end
 
     def forum_post_count
-      user_status.forum_post_count
+      user_status&.forum_post_count || 0
     end
 
     def favorite_count
-      user_status.favorite_count
+      user_status&.favorite_count || 0
     end
 
     def comment_count
-      user_status.comment_count
+      user_status&.comment_count || 0
     end
 
     def flag_count
-      user_status.post_flag_count
+      user_status&.post_flag_count || 0
     end
 
     def ticket_count
-      user_status.ticket_count
+      user_status&.ticket_count || 0
     end
 
     ## !DB
@@ -817,15 +824,15 @@ class User < ApplicationRecord
     end
 
     def post_replacement_rejected_count
-      user_status.post_replacement_rejected_count
+      user_status&.post_replacement_rejected_count || 0
     end
 
     def own_post_replaced_count
-      user_status.own_post_replaced_count
+      user_status&.own_post_replaced_count || 0
     end
 
     def own_post_replaced_penalize_count
-      user_status.own_post_replaced_penalize_count
+      user_status&.own_post_replaced_penalize_count || 0
     end
 
     def refresh_counts!

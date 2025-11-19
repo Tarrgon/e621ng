@@ -21,7 +21,7 @@ class IqdbQueriesControllerTest < ActionDispatch::IntegrationTest
           get iqdb_queries_path, params: { url: "https://google.com/foo.jpg" }
 
           assert_response :success
-          assert_select("#post_#{post.id}")
+          assert_select("article.thumbnail[data-id='#{post.id}']")
         end
       end
 
@@ -34,7 +34,35 @@ class IqdbQueriesControllerTest < ActionDispatch::IntegrationTest
 
           get iqdb_queries_path, params: { post_id: post.id }
           assert_response :success
-          assert_select("#post_#{post.id}")
+          assert_select("article.thumbnail[data-id='#{post.id}']")
+        end
+
+        should "return empty results for posts with corrupt 1x1 dimensions" do
+          post = create(:post, image_width: 1, image_height: 1)
+          # No IQDB request should be made since has_preview? returns false
+
+          get iqdb_queries_path, params: { post_id: post.id }
+          assert_response :success
+          # Should render page with no results
+        end
+
+        should "reject non-numeric values" do
+          get iqdb_queries_path, params: { post_id: "invalid" }
+          assert_response 400
+        end
+      end
+
+      context "with a file parameter" do
+        should "reject non-file objects" do
+          get iqdb_queries_path, params: { file: { foo: "bar" } }
+          assert_response 400
+        end
+      end
+
+      context "with a hash parameter" do
+        should "reject non-hex hash values" do
+          get iqdb_queries_path, params: { hash: "not-a-valid-hex-hash" }
+          assert_response 400
         end
       end
     end

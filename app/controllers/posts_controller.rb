@@ -11,10 +11,13 @@ class PostsController < ApplicationController
       @post = Post.find_by!(md5: params[:md5])
       respond_with(@post) do |format|
         format.html { redirect_to post_path(@post) }
+        format.json do
+          render json: { post: PostBlueprint.render_as_hash(@post) }
+        end
       end
     else
       @post_set = PostSets::Post.new(tag_query, params[:page], limit: params[:limit], random: params[:random])
-      @posts = PostsDecorator.decorate_collection(@post_set.posts)
+      @posts = @post_set.posts
 
       @query = tag_query.nil? ? [] : tag_query.strip.split(/ /, 2).compact_blank
       if @query.length == 1
@@ -36,7 +39,7 @@ class PostsController < ApplicationController
 
       respond_with(@posts) do |format|
         format.json do
-          render json: @post_set.api_posts, root: "posts"
+          render json: { posts: PostBlueprint.render_as_hash(@post_set.api_posts) }
         end
         format.atom
       end
@@ -62,7 +65,11 @@ class PostsController < ApplicationController
       @comment_votes = CommentVote.none
     end
 
-    respond_with(@post)
+    respond_with(@post) do |format|
+      format.json do
+        render json: { post: PostBlueprint.render_as_hash(@post) }
+      end
+    end
   end
 
   def show_seq
@@ -86,6 +93,9 @@ class PostsController < ApplicationController
 
     respond_with(@post) do |format|
       format.html { render "posts/show" }
+      format.json do
+        render json: { post: PostBlueprint.render_as_hash(@post) }
+      end
     end
   end
 
@@ -153,8 +163,8 @@ class PostsController < ApplicationController
   end
 
   def respond_with_post_after_update(post)
-    respond_with(post) do |format|
-      format.html do
+    respond_with(post) do |format| # rubocop:disable Metrics/BlockLength
+      format.html do # rubocop:disable Metrics/BlockLength
         if post.warnings.any?
           warnings = post.warnings.full_messages.join(".\n \n")
           if warnings.length > 45_000
@@ -190,7 +200,7 @@ class PostsController < ApplicationController
       end
 
       format.json do
-        render json: post
+        render json: { post: PostBlueprint.render_as_hash(post) }
       end
     end
   end
