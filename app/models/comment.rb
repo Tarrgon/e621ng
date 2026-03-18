@@ -14,14 +14,18 @@ class Comment < ApplicationRecord
   validates :body, length: { minimum: 1, maximum: Danbooru.config.comment_max_size }
 
   after_create :update_last_commented_at_on_create
+  after_destroy :update_last_commented_at_on_destroy
+  after_save :update_last_commented_at_on_destroy, if: ->(rec) { rec.is_hidden? && rec.saved_change_to_is_hidden? }
+
+  after_create_commit :enqueue_automod_create_check
+  after_update_commit :enqueue_automod_update_check, if: :saved_change_to_body?
+
   after_update(if: ->(rec) { !rec.saved_change_to_is_hidden? && CurrentUser.id != rec.creator_id }) do |rec|
     ModAction.log(:comment_update, { comment_id: rec.id, user_id: rec.creator_id })
   end
-  after_destroy :update_last_commented_at_on_destroy
   after_destroy do |rec|
     ModAction.log(:comment_delete, { comment_id: rec.id, user_id: rec.creator_id })
   end
-  after_save :update_last_commented_at_on_destroy, if: ->(rec) { rec.is_hidden? && rec.saved_change_to_is_hidden? }
   after_save(if: ->(rec) { rec.saved_change_to_is_hidden? && CurrentUser.id != rec.creator_id }) do |rec|
     action = rec.is_hidden? ? :comment_hide : :comment_unhide
     ModAction.log(action, { comment_id: rec.id, user_id: rec.creator_id })
@@ -98,7 +102,7 @@ class Comment < ApplicationRecord
 
     def search(params)
       q = super.includes(:creator).includes(:updater).includes(:post)
-      q = q.accessible
+      q = q.accessible(CurrentUser.user, bypass_user_settings: params[:id].present?)
       creator_filter_applied = false
 
       # Body search subquery: prevent timeouts on broad searches
@@ -307,5 +311,15 @@ class Comment < ApplicationRecord
 
   def unhide!
     update(is_hidden: false)
+  end
+
+  private
+
+  def enqueue_automod_create_check
+    AutomodCheckJob.perform_later(id)
+  end
+
+  def enqueue_automod_update_check
+    AutomodCheckJob.perform_later(id)
   end
 end

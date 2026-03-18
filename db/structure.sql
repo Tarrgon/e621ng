@@ -53,7 +53,13 @@ CREATE TABLE public.api_keys (
     user_id integer NOT NULL,
     key character varying NOT NULL,
     created_at timestamp without time zone NOT NULL,
-    updated_at timestamp without time zone NOT NULL
+    updated_at timestamp without time zone NOT NULL,
+    name character varying NOT NULL,
+    last_used_at timestamp(6) without time zone,
+    last_ip_address inet,
+    last_user_agent text,
+    expires_at timestamp(6) without time zone,
+    notified_at timestamp(6) without time zone
 );
 
 
@@ -200,6 +206,41 @@ CREATE SEQUENCE public.artists_id_seq
 --
 
 ALTER SEQUENCE public.artists_id_seq OWNED BY public.artists.id;
+
+
+--
+-- Name: automod_rules; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.automod_rules (
+    id bigint NOT NULL,
+    name character varying NOT NULL,
+    description text,
+    regex text NOT NULL,
+    enabled boolean DEFAULT true NOT NULL,
+    creator_id bigint NOT NULL,
+    created_at timestamp(6) without time zone NOT NULL,
+    updated_at timestamp(6) without time zone NOT NULL
+);
+
+
+--
+-- Name: automod_rules_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.automod_rules_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: automod_rules_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.automod_rules_id_seq OWNED BY public.automod_rules.id;
 
 
 --
@@ -2522,6 +2563,13 @@ ALTER TABLE ONLY public.artists ALTER COLUMN id SET DEFAULT nextval('public.arti
 
 
 --
+-- Name: automod_rules id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.automod_rules ALTER COLUMN id SET DEFAULT nextval('public.automod_rules_id_seq'::regclass);
+
+
+--
 -- Name: avoid_posting_versions id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -2972,6 +3020,14 @@ ALTER TABLE ONLY public.artist_versions
 
 ALTER TABLE ONLY public.artists
     ADD CONSTRAINT artists_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: automod_rules automod_rules_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.automod_rules
+    ADD CONSTRAINT automod_rules_pkey PRIMARY KEY (id);
 
 
 --
@@ -3457,6 +3513,13 @@ ALTER TABLE ONLY public.wiki_pages
 
 
 --
+-- Name: index_api_keys_on_expires_at_and_notified_at; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_api_keys_on_expires_at_and_notified_at ON public.api_keys USING btree (expires_at, notified_at) WHERE (expires_at IS NOT NULL);
+
+
+--
 -- Name: index_api_keys_on_key; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -3464,10 +3527,10 @@ CREATE UNIQUE INDEX index_api_keys_on_key ON public.api_keys USING btree (key);
 
 
 --
--- Name: index_api_keys_on_user_id; Type: INDEX; Schema: public; Owner: -
+-- Name: index_api_keys_on_name_and_user_id; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE UNIQUE INDEX index_api_keys_on_user_id ON public.api_keys USING btree (user_id);
+CREATE UNIQUE INDEX index_api_keys_on_name_and_user_id ON public.api_keys USING btree (name, user_id);
 
 
 --
@@ -3573,6 +3636,20 @@ CREATE INDEX index_artists_on_name_trgm ON public.artists USING gin (name public
 --
 
 CREATE INDEX index_artists_on_other_names ON public.artists USING gin (other_names);
+
+
+--
+-- Name: index_automod_rules_on_creator_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_automod_rules_on_creator_id ON public.automod_rules USING btree (creator_id);
+
+
+--
+-- Name: index_automod_rules_on_name; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX index_automod_rules_on_name ON public.automod_rules USING btree (name);
 
 
 --
@@ -4824,6 +4901,14 @@ ALTER TABLE ONLY public.favorites
 
 
 --
+-- Name: automod_rules fk_rails_af3a8c8cd0; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.automod_rules
+    ADD CONSTRAINT fk_rails_af3a8c8cd0 FOREIGN KEY (creator_id) REFERENCES public.users(id);
+
+
+--
 -- Name: avoid_postings fk_rails_b2ebf2bc30; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -4894,6 +4979,8 @@ ALTER TABLE ONLY public.staff_notes
 SET search_path TO "$user", public;
 
 INSERT INTO "schema_migrations" (version) VALUES
+('20260310162913'),
+('20260204011446'),
 ('20251127000001'),
 ('20251114015027'),
 ('20251113060711'),

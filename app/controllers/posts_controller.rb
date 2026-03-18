@@ -142,6 +142,9 @@ class PostsController < ApplicationController
     raise ActiveRecord::RecordNotFound if @post.nil?
     respond_with(@post) do |format|
       format.html { redirect_to post_path(@post, q: params[:tags]) }
+      format.json do
+        render_posts_json(PostBlueprint.render_as_hash(@post))
+      end
     end
   end
 
@@ -229,7 +232,7 @@ class PostsController < ApplicationController
     permitted_params += %i[is_rating_locked] if CurrentUser.is_privileged?
     permitted_params += %i[is_note_locked bg_color] if CurrentUser.is_janitor?
     permitted_params += %i[is_comment_locked] if CurrentUser.is_moderator?
-    permitted_params += %i[is_status_locked is_comment_disabled locked_tags hide_from_anonymous hide_from_search_engines] if CurrentUser.is_admin?
+    permitted_params += %i[is_status_locked is_comment_disabled locked_tags hide_from_anonymous hide_from_search_engines hide_favorites_list] if CurrentUser.is_admin?
 
     params.require(:post).permit(permitted_params)
   end
