@@ -361,7 +361,7 @@ CREATE TABLE public.blips (
     creator_id integer NOT NULL,
     body character varying NOT NULL,
     response_to integer,
-    is_hidden boolean DEFAULT false,
+    is_deleted boolean DEFAULT false,
     created_at timestamp without time zone NOT NULL,
     updated_at timestamp without time zone NOT NULL,
     warning_type integer,
@@ -1785,6 +1785,106 @@ CREATE TABLE public.schema_migrations (
 
 
 --
+-- Name: search_trend_blacklists; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.search_trend_blacklists (
+    id bigint NOT NULL,
+    tag character varying NOT NULL,
+    reason character varying DEFAULT ''::character varying NOT NULL,
+    creator_id bigint NOT NULL,
+    created_at timestamp(6) without time zone NOT NULL,
+    updated_at timestamp(6) without time zone NOT NULL
+);
+
+
+--
+-- Name: search_trend_blacklists_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.search_trend_blacklists_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: search_trend_blacklists_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.search_trend_blacklists_id_seq OWNED BY public.search_trend_blacklists.id;
+
+
+--
+-- Name: search_trend_hourlies; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.search_trend_hourlies (
+    id bigint NOT NULL,
+    tag character varying NOT NULL,
+    hour timestamp(6) without time zone NOT NULL,
+    count integer DEFAULT 0 NOT NULL,
+    processed boolean DEFAULT false NOT NULL,
+    created_at timestamp(6) without time zone NOT NULL,
+    updated_at timestamp(6) without time zone NOT NULL
+);
+
+
+--
+-- Name: search_trend_hourlies_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.search_trend_hourlies_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: search_trend_hourlies_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.search_trend_hourlies_id_seq OWNED BY public.search_trend_hourlies.id;
+
+
+--
+-- Name: search_trends; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.search_trends (
+    id bigint NOT NULL,
+    tag character varying NOT NULL,
+    day date NOT NULL,
+    count integer DEFAULT 0 NOT NULL,
+    created_at timestamp(6) without time zone NOT NULL,
+    updated_at timestamp(6) without time zone NOT NULL
+);
+
+
+--
+-- Name: search_trends_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.search_trends_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: search_trends_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.search_trends_id_seq OWNED BY public.search_trends.id;
+
+
+--
 -- Name: settings; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -2850,6 +2950,27 @@ ALTER TABLE ONLY public.posts ALTER COLUMN change_seq SET DEFAULT nextval('publi
 
 
 --
+-- Name: search_trend_blacklists id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.search_trend_blacklists ALTER COLUMN id SET DEFAULT nextval('public.search_trend_blacklists_id_seq'::regclass);
+
+
+--
+-- Name: search_trend_hourlies id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.search_trend_hourlies ALTER COLUMN id SET DEFAULT nextval('public.search_trend_hourlies_id_seq'::regclass);
+
+
+--
+-- Name: search_trends id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.search_trends ALTER COLUMN id SET DEFAULT nextval('public.search_trends_id_seq'::regclass);
+
+
+--
 -- Name: settings id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -3358,6 +3479,30 @@ ALTER TABLE ONLY public.posts
 
 ALTER TABLE ONLY public.schema_migrations
     ADD CONSTRAINT schema_migrations_pkey PRIMARY KEY (version);
+
+
+--
+-- Name: search_trend_blacklists search_trend_blacklists_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.search_trend_blacklists
+    ADD CONSTRAINT search_trend_blacklists_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: search_trend_hourlies search_trend_hourlies_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.search_trend_hourlies
+    ADD CONSTRAINT search_trend_hourlies_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: search_trends search_trends_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.search_trends
+    ADD CONSTRAINT search_trends_pkey PRIMARY KEY (id);
 
 
 --
@@ -4381,6 +4526,13 @@ CREATE UNIQUE INDEX index_post_votes_on_user_id_and_post_id ON public.post_votes
 
 
 --
+-- Name: index_posts_on_approver_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_posts_on_approver_id ON public.posts USING btree (approver_id);
+
+
+--
 -- Name: index_posts_on_change_seq; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -4456,6 +4608,76 @@ CREATE INDEX index_posts_on_uploader_id ON public.posts USING btree (uploader_id
 --
 
 CREATE INDEX index_posts_on_uploader_ip_addr ON public.posts USING btree (uploader_ip_addr);
+
+
+--
+-- Name: index_search_trend_blacklists_on_creator_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_search_trend_blacklists_on_creator_id ON public.search_trend_blacklists USING btree (creator_id);
+
+
+--
+-- Name: index_search_trend_blacklists_on_tag; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX index_search_trend_blacklists_on_tag ON public.search_trend_blacklists USING btree (tag);
+
+
+--
+-- Name: index_search_trend_hourlies_on_hour; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_search_trend_hourlies_on_hour ON public.search_trend_hourlies USING btree (hour);
+
+
+--
+-- Name: index_search_trend_hourlies_on_hour_unprocessed; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_search_trend_hourlies_on_hour_unprocessed ON public.search_trend_hourlies USING btree (hour) WHERE (processed = false);
+
+
+--
+-- Name: index_search_trend_hourlies_on_processed; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_search_trend_hourlies_on_processed ON public.search_trend_hourlies USING btree (processed);
+
+
+--
+-- Name: index_search_trend_hourlies_on_processed_and_hour; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_search_trend_hourlies_on_processed_and_hour ON public.search_trend_hourlies USING btree (processed, hour);
+
+
+--
+-- Name: index_search_trend_hourlies_on_tag_and_hour; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX index_search_trend_hourlies_on_tag_and_hour ON public.search_trend_hourlies USING btree (tag, hour);
+
+
+--
+-- Name: index_search_trends_on_day_and_count; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_search_trends_on_day_and_count ON public.search_trends USING btree (day, count);
+
+
+--
+-- Name: index_search_trends_on_tag_and_day; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX index_search_trends_on_tag_and_day ON public.search_trends USING btree (tag, day);
+
+
+--
+-- Name: index_search_trends_on_tag_trigram; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_search_trends_on_tag_trigram ON public.search_trends USING gin (tag public.gin_trgm_ops);
 
 
 --
@@ -4725,6 +4947,13 @@ CREATE INDEX index_users_on_last_ip_addr ON public.users USING btree (last_ip_ad
 
 
 --
+-- Name: index_users_on_last_logged_in_at; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_users_on_last_logged_in_at ON public.users USING btree (last_logged_in_at);
+
+
+--
 -- Name: index_users_on_lower_profile_about_trgm; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -4834,6 +5063,14 @@ CREATE INDEX index_wiki_pages_on_updated_at ON public.wiki_pages USING btree (up
 --
 
 CREATE TRIGGER posts_update_change_seq BEFORE UPDATE ON public.posts FOR EACH ROW EXECUTE FUNCTION public.posts_trigger_change_seq();
+
+
+--
+-- Name: search_trend_blacklists fk_rails_001fdd1bc2; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.search_trend_blacklists
+    ADD CONSTRAINT fk_rails_001fdd1bc2 FOREIGN KEY (creator_id) REFERENCES public.users(id);
 
 
 --
@@ -4979,6 +5216,12 @@ ALTER TABLE ONLY public.staff_notes
 SET search_path TO "$user", public;
 
 INSERT INTO "schema_migrations" (version) VALUES
+('20260329181337'),
+('20260325154501'),
+('20260324195504'),
+('20260324153600'),
+('20260312140702'),
+('20260311194405'),
 ('20260310162913'),
 ('20260204011446'),
 ('20251127000001'),

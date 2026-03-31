@@ -63,8 +63,14 @@ class TagQuery
 
   # Tags with parsed values of `true` or `false`. See `TagQuery#parse_boolean` for details.
   BOOLEAN_METATAGS = %w[
-    hassource hasdescription isparent ischild inpool pending_replacements artverified
+    hassource hasdescription isparent ischild hasparent haschild haschildren inpool pending_replacements artverified
   ].freeze
+
+  BOOLEAN_METATAG_ALIASES = {
+    "hasparent"   => "ischild",
+    "haschild"    => "isparent",
+    "haschildren" => "isparent",
+  }.freeze
 
   CATEGORY_METATAG_MAP = TagCategory::SHORT_NAME_MAPPING.to_h { |k, v| [-"#{k}tags", -"tag_count_#{v}"] }.freeze
 
@@ -302,6 +308,8 @@ class TagQuery
     else
       parse_query(query, **)
     end
+
+    q[:order] = "random" if q[:random_seed].present? && q[:order].nil?
     # raise CountExceededError if @tag_count > Danbooru.config.tag_query_limit - free_tags_count
   end
 
@@ -985,12 +993,12 @@ class TagQuery
       end
       last_index += curr_match.end(0)
     end
-    plus_one = nil
     # For each quoted metatag, match all the non-quoted queried metatags between the end of the last
     # quoted metatag and the start of this one, then check and process this quoted metatag.
     #
     # If there's no (more) quoted metatags, then just search each metatag between the last index and the end.
-    while (quoted_m = query[last_index...query.length].presence&.match(REGEX_ANY_QUOTED_METATAG)) || (!plus_one && (plus_one = true)) # rubocop:disable Lint/LiteralAssignmentInCondition
+    loop do
+      quoted_m = query[last_index...query.length].presence&.match(REGEX_ANY_QUOTED_METATAG)
       # If there are non-quoted matches before current quoted & current quoted doesn't match, manual
       # update of last index requires the offset quoted_m was found with.
       prior_last_index = last_index
@@ -1341,7 +1349,11 @@ class TagQuery
 
       when "fav", "-fav", "~fav", "favoritedby", "-favoritedby", "~favoritedby"
         add_to_query(type, :fav_ids) do
-          favuser = User.find_by_name_or_id(g2) # rubocop:disable Rails/DynamicFindBy
+          if g2.downcase == "me" && CurrentUser.user
+            favuser = CurrentUser.user
+          else
+            favuser = User.find_by_name_or_id(g2) # rubocop:disable Rails/DynamicFindBy
+          end
 
           next -1 unless favuser # next 0 unless favuser
           raise Favorite::HiddenError if favuser.hide_favorites?
@@ -1445,7 +1457,9 @@ class TagQuery
 
       when *COUNT_METATAGS then q[metatag_name.downcase.to_sym] = ParseValue.range(g2)
 
-      when *BOOLEAN_METATAGS then q[metatag_name.downcase.to_sym] = parse_boolean(g2)
+      when *BOOLEAN_METATAGS
+        canonical = BOOLEAN_METATAG_ALIASES.fetch(metatag_name.downcase, metatag_name.downcase)
+        q[canonical.to_sym] = parse_boolean(g2)
 
       else
         add_tag(token)

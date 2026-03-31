@@ -21,6 +21,11 @@ class PostsController < ApplicationController
       @post_set = PostSets::Post.new(tag_query, params[:page], limit: params[:limit], random: params[:random])
       @posts = @post_set.posts
 
+      # Record trending tags for page 1 queries to avoid double-counting pagination
+      if tag_query.present? && (params[:page].blank? || params[:page].to_i <= 1)
+        SearchTrendHourly.record_query!(tag_query, ip: request.remote_ip)
+      end
+
       @query = tag_query.nil? ? [] : tag_query.strip.split(/ /, 2).compact_blank
       if @query.length == 1
         @wiki_page = WikiPage.titled(@query[0])
