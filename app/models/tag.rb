@@ -10,6 +10,7 @@ class Tag < ApplicationRecord
 
   validates :name, uniqueness: true, tag_name: true, on: :create
   validates :name, length: { in: 1..100 }
+  validates :category, numericality: { only_integer: true }
   validates :category, inclusion: { in: TagCategory::CATEGORY_IDS }
   validate :user_can_create_tag?, on: :create
   validate :user_can_change_category?, if: :category_changed?
@@ -70,12 +71,20 @@ class Tag < ApplicationRecord
       end
     end
 
-    def real_post_count
-      @real_post_count ||= Post.tag_match(name, resolve_aliases: false).count_only
+    def post_count_from_opensearch
+      Post.tag_match(name, resolve_aliases: false).count_only
+    end
+
+    # Returns an authoritative post count from the database.
+    # NOTE: this query is extraordinarily expensive. It cannot be used in anything directly
+    # user-facing. The only reasonable use case is a background job that is fixing post counts
+    # for tags that have drifted out of sync.
+    def post_count_from_db
+      Post.undeleted.sql_raw_tag_match(name).count
     end
 
     def fix_post_count
-      update_column(:post_count, real_post_count)
+      update_column(:post_count, post_count_from_db)
     end
   end
 
@@ -274,8 +283,9 @@ class Tag < ApplicationRecord
 
       self.related_tags = RelatedTagCalculator.calculate_from_sample_to_array(name).join(" ")
       self.related_tags_updated_at = Time.now
-      fix_post_count if post_count > 20 && rand(post_count) <= 1
       save
+
+      TagPostCountJob.perform_later(id) if post_count > 20 && rand(post_count) <= 1
     rescue ActiveRecord::StatementInvalid
     end
 
@@ -348,11 +358,11 @@ class Tag < ApplicationRecord
       end
 
       if params[:category].present?
-        category_ids = params[:category].split(",").first(100).grep(/^\d+$/)
+        category_ids = params[:category].split(",").first(Danbooru.config.max_per_page).grep(/^\d+$/)
         q = q.where(category: category_ids)
       end
 
-      if params[:hide_empty].blank? || params[:hide_empty].to_s.truthy?
+      if params[:hide_empty].nil? || params[:hide_empty].to_s.truthy?
         q = q.where("post_count > 0")
       end
 

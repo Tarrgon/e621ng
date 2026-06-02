@@ -70,19 +70,6 @@ module Danbooru
       "/db_export/"
     end
 
-    def levels
-      {
-        "Anonymous" => 0,
-        "Blocked" => 10,
-        "Member" => 20,
-        "Privileged" => 30,
-        "Former Staff" => 34,
-        "Janitor" => 35,
-        "Moderator" => 40,
-        "Admin" => 50,
-      }
-    end
-
     # Prevent new users from going above 80k while allowing those currently above
     # it to continue adding new favorites with the old limit.
     # { 123 => 200_000 }
@@ -126,7 +113,7 @@ module Danbooru
     end
 
     def webp_previews_enabled?
-      false
+      true
     end
 
     # Large resize image width. Set to nil to disable.
@@ -559,6 +546,15 @@ module Danbooru
       ]
     end
 
+    # What reason for the automatically created AI check flag
+    def check_for_ai_content_flag_reason
+      "uploading_guidelines"
+    end
+
+    def grandfathered_post_cutoff
+      Time.zone.local(2015, 1, 1)
+    end
+
     def auto_flag_ai_posts?
       true
     end
@@ -607,6 +603,12 @@ module Danbooru
       nil
     end
 
+    # Name of the default home page shown at /help.
+    # This should correspond to the `name` field of a HelpPage record.
+    def help_landing_page
+      "about"
+    end
+
     def flag_notice_wiki_page
       "help:flag_notice"
     end
@@ -618,13 +620,14 @@ module Danbooru
     # The template for the auto-dispatched notification DMail to uploaders of post auto-deletion.
     # Replaces the following strings with their values:
     # * `%POST_ID%`: The id of the deleted post
+    # * `%FLAG_ID%`: The id of the deletion flag
     # * `%UPLOADER_ID%`: The id of the uploader
     #
     # ## Example Value
     # ```ruby
     # {
     #     title: "Post #%POST_ID% has been deleted",
-    #     body: "Post #%POST_ID% has been automatically deleted, as it has not been approved within #{unapproved_post_deletion_window.inspect}.\n\nThis is a courtesy notification; you don't need to take further action if you don't want to. If you would like to request this post to be reviewed, you can ask one of \"our janitors\":[/users?commit=Search&search%5Blevel%5D=#{Danbooru.config.levels['Janitor']}].\n\nYou can see a list of your deleted posts \"here\":[/deleted_posts?user_id=%UPLOADER_ID%]; you can access this at any time by going to \"your profile page\":[/users/%UPLOADER_ID%] & selecting the `deleted` tab on the `Upload` pane, or you can search {{user:!%UPLOADER_ID% status:deleted}}.",
+    #     body: "Post #%POST_ID% has been automatically deleted, as it has not been approved within #{unapproved_post_deletion_window.inspect}.\n\nThis is a courtesy notification; you don't need to take further action if you don't want to. If you would like to request this post to be reviewed, you can ask one of \"our janitors\":[/users?commit=Search&search%5Blevel%5D=#{UserLevel::JANITOR}].\n\nYou can see a list of your deleted posts \"here\":[/deleted_posts?user_id=%UPLOADER_ID%]; you can access this at any time by going to \"your profile page\":[/users/%UPLOADER_ID%] & selecting the `deleted` tab on the `Upload` pane, or you can search {{user:!%UPLOADER_ID% status:deleted}}.",
     #   }
     # ```
     def post_pruned_dmail_template
@@ -633,6 +636,7 @@ module Danbooru
     # Strings used as templates for the optional notification DMail to uploaders on post deletion.
     # Replaces the following strings with their values:
     # * `%POST_ID%`: The id of the deleted post
+    # * `%FLAG_ID%`: The id of the deletion flag
     # * `%STAFF_NAME%`: The name of the deleting staff member
     # * `%STAFF_ID%`: The id of the deleting staff member
     # * `%UPLOADER_ID%`: The id of the uploader
@@ -648,7 +652,7 @@ module Danbooru
 
 This is a courtesy notification; you don't need to take further action if you don't want to.
 
-If you would like to contest the deletion, you can follow the procedure outlined \"here\":[/help/faq#deleted]
+If you would like to contest the deletion, click \"this link\":[/appeals/new?disp_id=%FLAG_ID%&qtype=flag].
 
 You can see a list of your deleted posts \"here\":[/deleted_posts?user_id=%UPLOADER_ID%]; you can access this at any time by going to \"your profile page\":[/users/%UPLOADER_ID%] & selecting the `deleted` tab on the `Upload` pane, or you can search {{user:!%UPLOADER_ID% status:deleted}}.",
         },
@@ -679,6 +683,12 @@ You can see a list of your deleted posts \"here\":[/deleted_posts?user_id=%UPLOA
     # The number of records displayed per page. Posts use `user.per_page` which is configurable by the user
     def records_per_page
       75
+    end
+
+    # The hard upper bound for the `limit` parameter and the user's `per_page` setting.
+    # Also caps list-style search params like `id:1,2,3` or `?search[id]=1,2,3`.
+    def max_per_page
+      320
     end
 
     def is_post_restricted?(_post)
@@ -810,10 +820,6 @@ You can see a list of your deleted posts \"here\":[/deleted_posts?user_id=%UPLOA
       }
     end
 
-    def subscribestar_url
-      nil
-    end
-
     # Additional video samples will be generated in these dimensions if it makes sense to do so
     # They will be available as additional scale options on applicable posts in the order they appear here
     def video_rescales
@@ -851,6 +857,13 @@ You can see a list of your deleted posts \"here\":[/deleted_posts?user_id=%UPLOA
       false
     end
 
+    def visitor_metrics_events
+      {
+        recommendation: false,
+        search_trend: false,
+      }
+    end
+
     def analytics_client_id
       nil
     end
@@ -871,8 +884,11 @@ You can see a list of your deleted posts \"here\":[/deleted_posts?user_id=%UPLOA
       nil
     end
 
-    def recommender_enabled?
-      false
+    def post_recommendations_enabled?
+      {
+        artist: true,
+        tags: true,
+      }
     end
   end
 

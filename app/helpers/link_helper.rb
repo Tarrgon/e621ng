@@ -150,6 +150,8 @@ module LinkHelper
 
     # image servers
     "4cdn.org" => "4chan.org",
+    "bsky.network" => "bsky.app",
+    "bsky.social" => "bsky.app",
     "cdn.donmai.us" => "danbooru.donmai.us",
     "cohostcdn.org" => "cohost.org",
     "discordapp.com" => "discord.com",
@@ -184,7 +186,7 @@ module LinkHelper
 
   def decorated_link_to(text, path, **)
     link_to(path, class: "decorated", **) do
-      favicon_for_link(path) + text
+      favicon_for_link(path) + tag.span(text)
     end
   end
 
@@ -194,15 +196,15 @@ module LinkHelper
       tag.img(
         class: "link-decoration",
         src: vite_asset_path("images/favicons/#{hostname}.png"),
+        alt: hostname,
+        width: 16,
+        height: 16,
         data: {
           hostname: hostname,
         },
       )
     else
-      tag.i(
-        class: "fa-solid fa-globe link-decoration",
-        data: { hostname: "none" },
-      )
+      svg_icon(:globe, class: "link-decoration", width: 16, height: 16)
     end
   end
 

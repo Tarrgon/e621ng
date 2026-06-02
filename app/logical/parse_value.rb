@@ -5,6 +5,8 @@ module ParseValue
   MIN_INT = -2_147_483_648
   extend self
 
+  class InvalidDateError < ArgumentError; end
+
   # Parses the specified time
   def date_from(target)
     case target
@@ -94,7 +96,7 @@ module ParseValue
       [:between, cast(left, type), cast(right, type)]
 
     elsif range.include?(",")
-      [:in, range.split(",")[0..99].map { |x| cast(x, type) }]
+      [:in, range.split(",").first(Danbooru.config.max_per_page).map { |x| cast(x, type) }]
 
     else
       [:eq, cast(range, type)]
@@ -147,7 +149,10 @@ module ParseValue
       end
 
       ago = time_string(object)
-      return ago if ago.present?
+      if ago.present?
+        return ago if ago.year.between?(1, 9999)
+        raise InvalidDateError, "Invalid date: #{object}"
+      end
 
       begin
         parsed_date = Time.zone.parse(object)

@@ -3,11 +3,22 @@
 class TicketsController < ApplicationController
   respond_to :html, :json, except: %i[create new]
   before_action :member_only, except: %i[index]
-  before_action :moderator_only, only: %i[update edit claim unclaim]
+  before_action :janitor_only, only: %i[update claim unclaim]
 
   def index
-    @tickets = Ticket.visible(CurrentUser.user).search(search_params).paginate(params[:page], limit: params[:limit])
+    @tickets = Ticket
+               .includes(:creator, :accused, :claimant)
+               .visible(CurrentUser.user)
+               .search(search_params)
+               .paginate(params[:page], limit: params[:limit])
+    preload_ticket_contents(@tickets)
     respond_with(@tickets)
+  end
+
+  def show
+    @ticket = Ticket.find(params[:id])
+    check_permission(@ticket)
+    respond_with(@ticket)
   end
 
   def new
@@ -31,21 +42,17 @@ class TicketsController < ApplicationController
     check_new_permission(@ticket)
     if @ticket.valid?
       @ticket.save
-      @ticket.push_pubsub("create")
       redirect_to(ticket_path(@ticket))
     else
       render action: "new"
     end
   end
 
-  def show
-    @ticket = Ticket.find(params[:id])
-    check_permission(@ticket)
-    respond_with(@ticket)
-  end
-
   def update
     @ticket = Ticket.find(params[:id])
+
+    raise User::PrivilegeError unless @ticket.can_view?(CurrentUser.user) && @ticket.can_handle?(CurrentUser.user)
+
     if @ticket.claimant_id.present? && @ticket.claimant_id != CurrentUser.id && !params[:force_claim].to_s.truthy?
       flash[:notice] = "Ticket has already been claimed by somebody else, submit again to force"
       redirect_to ticket_path(@ticket, force_claim: "true")
@@ -66,7 +73,6 @@ class TicketsController < ApplicationController
     if @ticket.valid?
       not_changed = ticket_params[:send_update_dmail].to_s.truthy? && (!@ticket.saved_change_to_response? && !@ticket.saved_change_to_status?)
       flash[:notice] = "Not sending update, no changes" if not_changed
-      @ticket.push_pubsub("update")
     end
 
     respond_with(@ticket)
@@ -74,6 +80,8 @@ class TicketsController < ApplicationController
 
   def claim
     @ticket = Ticket.find(params[:id])
+
+    raise User::PrivilegeError unless @ticket.can_view?(CurrentUser.user) && @ticket.can_claim?(CurrentUser.user)
 
     if @ticket.claimant.nil?
       @ticket.claim!
@@ -85,6 +93,8 @@ class TicketsController < ApplicationController
 
   def unclaim
     @ticket = Ticket.find(params[:id])
+
+    raise User::PrivilegeError unless @ticket.can_view?(CurrentUser.user) && @ticket.can_claim?(CurrentUser.user)
 
     if @ticket.claimant.nil?
       flash[:notice] = "Ticket not claimed"
@@ -102,6 +112,16 @@ class TicketsController < ApplicationController
   end
 
   private
+
+  def preload_ticket_contents(tickets)
+    tickets.group_by(&:qtype).each_value do |group|
+      model = group.first.model
+      next if model.nil?
+      ids = group.map(&:disp_id).compact
+      content_map = model.where(id: ids).index_by(&:id)
+      group.each { |t| t.instance_variable_set(:@content, content_map[t.disp_id]) }
+    end
+  end
 
   def ticket_params
     params.require(:ticket).permit(%i[qtype disp_id reason report_reason])

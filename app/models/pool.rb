@@ -13,6 +13,7 @@ class Pool < ApplicationRecord
   validates :description, length: { maximum: Danbooru.config.pool_descr_max_size }
   validate :user_not_create_limited, on: :create
   validate :user_not_limited, on: :update, if: :limited_attribute_changed?
+  validate :validate_post_ids, if: :post_ids_changed?
   validate :user_not_posts_limited, on: :update, if: :post_ids_changed?
   validate :validate_name, if: :name_changed?
   validates :category, inclusion: { in: %w[series collection] }
@@ -214,6 +215,36 @@ class Pool < ApplicationRecord
     end
   end
 
+  def validate_post_ids
+    post_ids_before = post_ids_before_last_save || post_ids_was
+    added = post_ids - post_ids_before
+
+    return if added.empty?
+
+    invalid_ids = []
+    sanitized_ids = []
+
+    added.each do |id|
+      safe_id = ParseValue.safe_id(id)
+      if safe_id <= 0
+        invalid_ids.push(id)
+      else
+        sanitized_ids.push(safe_id)
+      end
+    end
+
+    if sanitized_ids.any?
+      existing_ids = Post.where(id: sanitized_ids).pluck(:id)
+      missing_ids = sanitized_ids - existing_ids
+      invalid_ids.concat(missing_ids)
+    end
+
+    return if invalid_ids.empty?
+
+    errors.add(:base, "Cannot add posts to pool. Invalid IDs: #{invalid_ids.join(', ')}")
+    false
+  end
+
   def add!(post)
     return if post.nil?
     return if post.id.nil?
@@ -309,8 +340,14 @@ class Pool < ApplicationRecord
     post_ids[n]
   end
 
+  def cover_post_id
+    return @cover_post_id if instance_variable_defined?(:@cover_post_id)
+    @cover_post_id = post_ids.first
+  end
+
   def cover_post
-    Post.find_by(id: post_ids.first)
+    return @cover_post if instance_variable_defined?(:@cover_post)
+    @cover_post = Post.find_by(id: cover_post_id)
   end
 
   def last_page
@@ -353,5 +390,14 @@ class Pool < ApplicationRecord
     if removed.any? && !CurrentUser.user.can_remove_from_pools?
       errors.add(:base, "You cannot removes posts from pools within the first week of sign up")
     end
+  end
+
+  def reload(options = nil)
+    super
+
+    @cover_post = nil
+    @cover_post_id = nil
+
+    self
   end
 end

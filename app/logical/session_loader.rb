@@ -30,13 +30,15 @@ class SessionLoader
     end
 
     CurrentUser.user.unban! if CurrentUser.user.ban_expired?
-    if CurrentUser.user.is_blocked?
+    if CurrentUser.user.is_restricted?
       recent_ban = CurrentUser.user.recent_ban
-      ban_message = "Account is banned: forever"
-      if recent_ban && recent_ban.expires_at.present?
-        ban_message = "Account is suspended for another #{recent_ban.expire_days}"
+      if recent_ban.nil? || recent_ban.prevent_login?
+        ban_message = "Account is banned: forever"
+        if recent_ban&.expires_at.present?
+          ban_message = "Account is suspended for another #{recent_ban.expire_days}"
+        end
+        raise AuthenticationFailure, ban_message
       end
-      raise AuthenticationFailure.new(ban_message)
     end
     update_user_login_tracking
     set_safe_mode
@@ -73,7 +75,7 @@ class SessionLoader
   end
 
   def refresh_old_remember_token
-    if cookies.encrypted[:remember] && !CurrentUser.is_anonymous?
+    if cookies.encrypted[:remember] && !CurrentUser.user.is_logged_out?
       cookies.encrypted[:remember] = {value: @remember_validator.generate("#{CurrentUser.id}:#{CurrentUser.password_token}", purpose: "rbr", expires_in: 14.days), expires: Time.now + 14.days, httponly: true, same_site: :lax, secure: Rails.env.production?}
     end
   end
@@ -106,11 +108,14 @@ class SessionLoader
   end
 
   def authenticate_api_key(name, api_key)
-    if name && !name.dup.force_encoding("UTF-8").valid_encoding?
+    unless name.is_a?(String) && api_key.is_a?(String)
+      raise AuthenticationFailure
+    end
+    unless name.dup.force_encoding("UTF-8").valid_encoding?
       Rails.logger.warn("Invalid UTF-8 in login parameter from #{request.remote_ip}")
       raise AuthenticationFailure
     end
-    if api_key && !api_key.dup.force_encoding("UTF-8").valid_encoding?
+    unless api_key.dup.force_encoding("UTF-8").valid_encoding?
       Rails.logger.warn("Invalid UTF-8 in api_key parameter from #{request.remote_ip}")
       raise AuthenticationFailure
     end
@@ -138,7 +143,7 @@ class SessionLoader
   end
 
   def update_user_login_tracking
-    return if CurrentUser.is_anonymous?
+    return if CurrentUser.user.is_logged_out?
 
     cache_key = if CurrentUser.api_key
                   "user_login_tracking:api_key:#{CurrentUser.api_key.id}"
@@ -174,9 +179,11 @@ class SessionLoader
   # This should normally happen when the user reads their last unread dmail.
   def refresh_unread_dmails
     return if skip_cookies?
-    return if CurrentUser.is_anonymous?
+    return if CurrentUser.user.is_logged_out?
     return if cookies[:hide_dmail_notice].blank?
 
-    cookies.delete(:hide_dmail_notice) if cookies[:hide_dmail_notice] != CurrentUser.user.has_mail?.to_s
+    if !CurrentUser.user.has_mail? && cookies[:hide_dmail_notice] == "1"
+      cookies.delete(:hide_dmail_notice)
+    end
   end
 end

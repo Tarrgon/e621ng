@@ -7,7 +7,6 @@
 <% unless disable_mobile_mode? %>
   <meta name="viewport" content="width=device-width,initial-scale=1">
 <% end %>
-
 <meta name="current-user-name" content="<%= CurrentUser.name %>">
 <meta name="current-user-id" content="<%= CurrentUser.id %>">
 <meta name="current-user-can-approve-posts" content="<%= CurrentUser.can_approve_posts? %>">
@@ -36,7 +35,10 @@
 <%= auto_discovery_link_tag :atom, posts_path(format: "atom", tags: params[:tags].is_a?(String) ? params[:tags] : nil) %>
 
 <%= vite_stylesheet_tag "styles" %>
-<%= vite_javascript_tag "application", nonce: true, defer: false %>
+<%= vite_javascript_tag "application.ts", nonce: content_security_policy_nonce, defer: false %>
+<%= vite_script_for_controller %>
+<%= vite_script_for_controller_and_action %>
+<%= vite_javascript_tag "finalize.ts", nonce: content_security_policy_nonce, defer: true %>
 
 <script type="application/ld+json">
 {
@@ -60,14 +62,17 @@
 }
 </script>
 
+<%# Site configuration for JavaScript %>
+<script type="text/plain" id="site-settings" data-encoding="base64"><%= site_settings_base64 %></script>
+
 <style id="blacklisted-hider">
-  .thumbnail, #image-container, #c-comments .post, .post-thumbnail {
+  .thumbnail, #image-container, #c-comments .post {
     visibility: hidden !important;
   }
 </style>
 <noscript>
   <style>
-    .thumbnail, #image-container, #c-comments .post, .post-thumbnail {
+    .thumbnail, #image-container, #c-comments .post {
       visibility: visible !important;
     }
   </style>

@@ -11,6 +11,7 @@ Rails.application.routes.draw do
     resources :automod_rules, only: %i[index new create edit update destroy]
     resources :users, only: %i[edit update] do
       member do
+        post :clear_avatar
         get :edit_blacklist
         post :update_blacklist
         get :request_password_reset
@@ -24,10 +25,17 @@ Rails.application.routes.draw do
       resources :dmails, only: %i[index show]
     end
     resource :dashboard, only: %i[show]
+    resources :discord_reports, only: %i[index]
     resources :exceptions, only: %i[index show]
     resource :reowner, controller: "reowner", only: %i[new create]
     resource :stuck_dnp, controller: "stuck_dnp", only: %i[new create]
     resources :destroyed_posts, only: %i[index show update]
+    resources :automod_dmails, only: %i[index show] do
+      member do
+        put :mark_as_read
+        put :mark_as_unread
+      end
+    end
   end
 
   namespace :security do
@@ -95,10 +103,11 @@ Rails.application.routes.draw do
       resource :deletion, only: %i[show destroy]
       resource :email_change, only: %i[new create]
       resource :dmail_filter, only: %i[edit update]
+      resource :avatar, only: %i[edit update]
     end
   end
 
-  resources :api_keys, except: %i[edit update] do
+  resources :api_keys, except: %i[edit update show] do
     member do
       post :regenerate
     end
@@ -123,7 +132,14 @@ Rails.application.routes.draw do
     end
   end
 
-  resources :tickets, except: %i[destroy] do
+  resources :tickets, except: %i[edit destroy] do
+    member do
+      post :claim
+      post :unclaim
+    end
+  end
+
+  resources :appeals, except: %i[edit destroy] do
     member do
       post :claim
       post :unclaim
@@ -213,7 +229,11 @@ Rails.application.routes.draw do
     resource :visit, controller: "forum_topic_visits"
   end
   resources :forum_categories
-  resources :help_pages, controller: "help", path: "help"
+  resources :help_pages, controller: "help", path: "help" do
+    collection do
+      get :list
+    end
+  end
   resources :ip_bans
   resources :upload_whitelists, except: %i[show] do
     collection do
@@ -280,9 +300,12 @@ Rails.application.routes.draw do
       get :show_seq
       put :mark_as_translated
       get :comments, to: "comments#for_post"
-      get :recommended
+      resource :similar, only: [], controller: "post_recommendations" do
+        get :artist
+        get :tags
+        get "", to: redirect { |params, req| "/iqdb_queries#{req.format.json? ? '.json' : ''}?post_id=#{params[:id]}" }
+      end
     end
-    get :similar, to: "iqdb_queries#index"
   end
   resources :post_votes, only: %i[index], as: :index_post_votes do
     collection do
@@ -332,7 +355,6 @@ Rails.application.routes.draw do
   resources :uploads
   resources :users do
     resource :password, only: %i[edit], controller: "maintenance/user/passwords"
-    resource :api_key, only: %i[show update destroy], controller: "maintenance/user/api_keys"
 
     member do
       get :upload_limit
@@ -340,6 +362,7 @@ Rails.application.routes.draw do
       post :disable_uploads
       post :flush_favorites
       get :fix_counts
+      get "/api_key", to: redirect("/api_keys")
     end
 
     collection do
@@ -385,6 +408,11 @@ Rails.application.routes.draw do
     end
   end
   resources :post_report_reasons
+  resources :post_flag_reasons do
+    collection do
+      post :clear_cache
+    end
+  end
   resources :post_sets do
     collection do
       get :for_select
@@ -420,7 +448,11 @@ Rails.application.routes.draw do
     end
   end
 
-  options "*all", to: "application#enable_cors"
+  resource :auth, only: [] do
+    collection do
+      get :login
+    end
+  end
 
   # aliases
   resources :wpages, controller: "wiki_pages"
@@ -526,10 +558,12 @@ Rails.application.routes.draw do
   get "/static/toggle_mobile_mode" => "static#disable_mobile_mode", as: "disable_mobile_mode"
   get "/static/theme" => "static#theme", as: "theme"
   get "/static/avoid_posting" => "static#avoid_posting", as: "avoid_posting_static"
-  get "/static/subscribestar" => "static#subscribestar", as: "subscribestar" if Danbooru.config.subscribestar_url.present?
   get "/static/furid" => "static#furid", as: "furid"
   get "/meta_searches/tags" => "meta_searches#tags", :as => "meta_searches_tags"
+  get "/robots.txt" => "static#robots", as: :robots
+
   get "status" => "rails/health#show", as: :rails_health_check
+  get "health" => "health#index", as: :health_check
 
   root to: "static#home"
 

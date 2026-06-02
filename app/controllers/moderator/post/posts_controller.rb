@@ -13,9 +13,9 @@ module Moderator
       def confirm_delete
         @post = ::Post.find(params[:id])
         @reason = @post.pending_flag&.reason || ""
-        @reason = "" if @reason =~ /uploading_guidelines/
+        @reason = "" if @post.pending_flag&.needs_staff_reason?
 
-        @dnp = @post.avoid_posting_artists
+        @dnp = @post.avoid_posting_tags
       end
 
       # Deletes the given post
@@ -32,8 +32,8 @@ module Moderator
             if @post.pending_flag.nil? || params[:from_flag].blank?
               flash[:notice] = "You must provide a reason for the deletion"
               return redirect_to(confirm_delete_moderator_post_post_path(@post, q: params[:q].presence))
-            elsif @post.pending_flag.reason =~ /uploading_guidelines/
-              flash[:notice] = "You must directly provide a reason for deletions due to an uploading guidelines flag."
+            elsif @post.pending_flag.needs_staff_reason?
+              flash[:notice] = "You must explicitly provide a deletion reason for this flag"
               return redirect_to(confirm_delete_moderator_post_post_path(@post, q: params[:q].presence))
             end
             # Pre-replace the reason so it's not found later
@@ -66,15 +66,11 @@ module Moderator
           end
 
           if params[:dmail].present?
+            reason = params[:reason].to_s
             Dmail.create_automated({
               to_id: @post.uploader_id,
-              title: "Post ##{params[:id]} has been deleted",
-              body: params[:dmail]
-                .gsub("%POST_ID%", params[:id].to_s)
-                .gsub("%STAFF_NAME%", CurrentUser.name)
-                .gsub("%STAFF_ID%", CurrentUser.id.to_s)
-                .gsub("%UPLOADER_ID%", @post.uploader_id.to_s)
-                .gsub("%REASON%", params[:reason].to_s),
+              title: @post.substitute_deletion_dmail_template(params[:dmail_title], reason) || "Post ##{params[:id]} has been deleted",
+              body: @post.substitute_deletion_dmail_template(params[:dmail], reason),
             })
           end
         end

@@ -4,11 +4,22 @@ class PostThumbnailComponent < ViewComponent::Base
   include IconHelper
   with_collection_parameter :post
 
-  def initialize(post:, **options)
+  RIBBON_SIDE = %i[left right].freeze
+
+  # Preload favorite/vote status for the whole collection up front so rendering
+  # the thumbnails doesn't issue a query per post. Posts may be Draper-wrapped.
+  def self.with_collection(collection, **kwargs)
+    posts = Array.wrap(collection).map { |post| post.respond_to?(:object) ? post.object : post }
+    Post.preload_stats!(posts)
+    super
+  end
+
+  def initialize(post:, post_counter: -1, **options)
     super()
 
     # Post may be wrapped in a Draper decorator, get the underlying object
     @post = post.respond_to?(:object) ? post.object : post
+    @post_counter = post_counter
     @options = options
     @user = defined?(CurrentUser) ? CurrentUser.user : nil
 
@@ -46,7 +57,7 @@ class PostThumbnailComponent < ViewComponent::Base
   def article_attributes
     {
       class: preview_classes.join(" "),
-      data: post.thumbnail_attributes.merge(border_states: border_state_count),
+      data: post.thumbnail_attributes,
     }
   end
 
@@ -62,16 +73,32 @@ class PostThumbnailComponent < ViewComponent::Base
     klass << "rating-explicit" if post.rating == "e"
     klass << "blacklistable" unless options[:no_blacklist]
     klass << "no-stats" unless should_show_stats?
+    klass << "shift-badge" if should_show_ribbon?(:left)
     klass
   end
 
-  def border_state_count
-    count = 0
-    count += 1 if post.has_visible_children?
-    count += 1 if post.parent_id.present?
-    count += 1 if post.is_pending?
-    count += 1 if post.is_flagged?
-    count
+  def ribbon_tooltip(side)
+    content = []
+
+    case side
+    when :left
+      content << "has child posts" if post.has_visible_children?
+      content << "has a parent post" if post.parent_id.present?
+    when :right
+      content << "flagged for deletion" if post.is_flagged?
+      content << "pending for approval" if post.is_pending?
+    end
+
+    content.join(" and ").capitalize << "."
+  end
+
+  def should_show_ribbon?(side)
+    case side
+    when :left
+      post.has_visible_children? || post.parent_id.present?
+    when :right
+      post.is_flagged? || post.is_pending?
+    end
   end
 
   ##############################
@@ -118,6 +145,15 @@ class PostThumbnailComponent < ViewComponent::Base
 
   def webp_enabled?
     Danbooru.config.webp_previews_enabled?
+  end
+
+  def image_attributes
+    attributes = {}
+    if @post_counter >= 0
+      attributes[:fetchpriority] = "high" if @post_counter < 5
+      attributes[:loading] = "lazy" if @post_counter >= 5
+    end
+    attributes
   end
 
   ##############################

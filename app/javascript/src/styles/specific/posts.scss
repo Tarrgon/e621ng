@@ -18,7 +18,7 @@ div#c-posts, div#c-uploads, div#c-post-replacements {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    max-width: 95vw;
+    max-width: 90vw;
 
     @include window-larger-than(50rem) {
       &:hover {
@@ -45,58 +45,6 @@ div#c-posts {
     }
     div.notice-parent {
       flex-grow: 1;
-    }
-  }
-
-  div#post-recommendations {
-    display: flex;
-    flex-flow: column;
-    max-width: calc(100vw - 0.5rem); // Bad, will fix later
-
-    // Tabs
-    &-tabs {
-      display: flex;
-      gap: 0.5rem;
-      padding: 0 0.5rem;
-
-      button {
-        background: unset;
-        color: themed("color-text");
-        @include st-radius-top;
-        &[data-action="closed"] { margin-left: auto; }
-      }
-    }
-
-    // Selected tab
-    &[data-action="artist"] button[data-action="artist"],
-    &[data-action="favorites"] button[data-action="favorites"],
-    &[data-action="tags"] button[data-action="tags"] {
-      background-color: themed("color-section");
-    }
-
-
-    // Recommendations list
-    &-list {
-      display: flex;
-      overflow: scroll hidden;
-      gap: 0.5rem;
-
-      background: themed("color-section");
-      padding: 0.5rem;
-      margin-bottom: 0.25rem;
-      @include st-radius;
-
-      --thumb-image-size: 128px; // Passed on to thumbnails
-      height: calc(var(--thumb-image-size) + 1.25rem);
-
-      -ms-overflow-style: none; /* IE and Edge */
-      scrollbar-width: none; /* Firefox */
-      &::-webkit-scrollbar { display: none; }
-    }
-
-    &[data-status="error"] #post-recommendations-list {
-      justify-content: center;
-      align-items: center;
     }
   }
 
@@ -201,7 +149,14 @@ div#c-posts {
     }
 
     div.notices {
+      display: flex;
+      align-items: flex-start;
       margin: 1em 0;
+      gap: 5em;
+
+      .threshold-comments-notice {
+        padding-top: 1em;
+      }
     }
 
     #pending-approval-notice {
@@ -246,6 +201,18 @@ div#c-posts {
       }
       textarea {
         width: 100%;
+        max-width: unset;
+        min-height: 5rem;
+        box-sizing: border-box;
+      }
+      div#tag-string-editor.pending {
+        min-height: 5rem;
+        background: themed("color-text-muted");
+        border-radius: 2px;
+        color: black;
+        font-family: monospace;
+        padding: 2px;
+        box-sizing: border-box;
       }
 
       #post_rating_e:checked + label {
@@ -272,7 +239,12 @@ div#c-posts {
 
         .nav-link {
           flex-shrink: 2;
-          padding: 0.5em
+          padding: 0.5em;
+
+          svg {
+            vertical-align: bottom;
+            stroke-width: 3;
+          }
         }
         a.nav-link:hover {
           background: themed("color-section-lighten-5");
@@ -286,6 +258,11 @@ div#c-posts {
           white-space: nowrap;
           text-overflow: ellipsis;
           width: 0;
+
+          svg {
+            stroke-width: 3;
+            vertical-align: bottom;
+          }
         }
       }
     }

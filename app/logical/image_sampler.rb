@@ -32,6 +32,43 @@ module ImageSampler
     end
   end
 
+  def generate_avatar_crop(post, user_id, pos_x:, pos_y:, width:)
+    sm = Danbooru.config.storage_manager
+    source_path = post.has_sample? ? sm.post_file_path(post, :sample_jpg) : post.file_path
+    image = Vips::Image.new_from_file(source_path)
+
+    cropped = image.crop(pos_x, pos_y, width, width)
+    target = Danbooru.config.small_image_width
+    resized = cropped.resize(target.to_f / width)
+
+    jpg = Tempfile.new(["avatar", ".jpg"], binmode: true)
+    webp = Tempfile.new(["avatar", ".webp"], binmode: true)
+
+    resized.jpegsave(
+      jpg.path,
+      Q: 90,
+      strip: true,
+      interlace: true,
+      optimize_coding: true,
+      optimize_scans: true,
+      trellis_quant: true,
+      quant_table: 3,
+    )
+    resized.webpsave(
+      webp.path,
+      Q: 90,
+      effort: 6,
+      alpha_q: 90,
+      smart_subsample: true,
+    )
+
+    sm.store_avatar(jpg, user_id, "jpg")
+    sm.store_avatar(webp, user_id, "webp")
+  ensure
+    jpg&.close!
+    webp&.close!
+  end
+
   def generate_replacement_images(replacement)
     return unless File.exist?(replacement.replacement_file_path)
     return if replacement.file_ext == "swf" # Cannot generate any kind of thumbnail
@@ -193,8 +230,24 @@ module ImageSampler
     jpg_image = Tempfile.new(["image-thumb", ".jpg"], binmode: true)
     webp_image = Tempfile.new(["image-thumb", ".webp"], binmode: true)
 
-    result.jpegsave(jpg_image.path, Q: 90, background: calc_background_color(background), strip: true, interlace: true, optimize_coding: true)
-    result.webpsave(webp_image.path, Q: 90, min_size: true)
+    result.jpegsave(
+      jpg_image.path,
+      Q: 90,
+      background: calc_background_color(background),
+      strip: true,
+      interlace: true,
+      optimize_coding: true,
+      optimize_scans: true,
+      trellis_quant: true,
+      quant_table: 3,
+    )
+    result.webpsave(
+      webp_image.path,
+      Q: 90,
+      effort: 6,
+      alpha_q: 90,
+      smart_subsample: true,
+    )
 
     {
       jpg: jpg_image,

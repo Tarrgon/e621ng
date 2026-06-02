@@ -31,10 +31,12 @@ tmp/*
 tmp/*.jpg
 tmp/*.png
 public/data
+public/sitemap.*
 .overmind.sock
 
 # Test output
 test/reports
+/spec/examples.txt
 
 # Editor files
 .idea

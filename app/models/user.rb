@@ -14,17 +14,6 @@ class User < ApplicationRecord
     end
   end
 
-  module Levels
-    Danbooru.config.levels.each do |name, level|
-      const_set(name.upcase.tr(" ", "_"), level)
-    end
-  end
-
-  # Used for `before_action :<role>_only`. Must have a corresponding `is_<role>?` method.
-  Roles = Levels.constants.map(&:downcase) + [
-    :approver,
-  ]
-
   # ================================================================================================#
   # UNDER NO CIRCUMSTANCES should new boolean attributes be added or removed from the middle of the #
   # list. Deprecated / unused bitflags should be prefixed with an underscore, and left in place.    #
@@ -52,7 +41,7 @@ class User < ApplicationRecord
     hide_comments
     show_hidden_comments
     show_post_statistics
-    is_banned
+    _is_banned
     forum_notification_dot
     receive_email_notifications
     enable_keyboard_navigation
@@ -74,6 +63,7 @@ class User < ApplicationRecord
     replacements_beta
     is_bd_staff
     is_bd_auditor
+    has_cropped_avatar
   ].freeze
 
   include Danbooru::HasBitFlags
@@ -91,10 +81,10 @@ class User < ApplicationRecord
   validate :validate_email_address_allowed, on: %i[create update], if: ->(rec) { (rec.new_record? && rec.email.present?) || (rec.email.present? && rec.email_changed?) }
 
   normalizes :profile_about, :profile_artinfo, with: ->(value) { value.gsub("\r\n", "\n") }
-  validates :name, presence: true # NOTE: validation order is important here. See UserNameValidator for details.
+  validates :name, presence: true, if: -> { new_record? || name_changed? } # NOTE: validation order is important here. See UserNameValidator for details.
   validates :name, user_name: true, on: :create
   validates :default_image_size, inclusion: { in: %w[large fit fitv original] }
-  validates :per_page, inclusion: { in: 1..320 }
+  validates :per_page, inclusion: { in: 1..Danbooru.config.max_per_page }
   validates :comment_threshold, presence: true
   validates :comment_threshold, numericality: { only_integer: true, less_than: 50_000, greater_than: -50_000 }
   validates :password, length: { minimum: 8, if: ->(rec) { rec.new_record? || rec.password.present? || rec.old_password.present? } }
@@ -108,6 +98,7 @@ class User < ApplicationRecord
   before_validation :blank_out_nonexistent_avatars
   validates :blacklisted_tags, length: { maximum: 150_000 }
   validates :custom_style, length: { maximum: 500_000 }
+  validates :custom_title, length: { maximum: 100 }, allow_blank: true
   validates :profile_about, length: { maximum: Danbooru.config.user_about_max_size }
   validates :profile_artinfo, length: { maximum: Danbooru.config.user_about_max_size }
   validates :time_zone, inclusion: { in: ActiveSupport::TimeZone.all.map(&:name) }
@@ -116,6 +107,11 @@ class User < ApplicationRecord
   after_create :create_user_status
   before_update :encrypt_password_on_update
   after_save :update_cache
+  after_save :clear_cropped_avatar_on_avatar_change
+
+  after_create_commit :enqueue_automod_user_check
+  after_update_commit :enqueue_automod_user_update_check,
+                      if: -> { saved_change_to_name? || saved_change_to_profile_about? || saved_change_to_profile_artinfo? }
 
   has_many :api_keys, dependent: :destroy
   has_one :dmail_filter
@@ -151,13 +147,12 @@ class User < ApplicationRecord
     end
 
     def unban!
-      self.is_banned = false
       self.level = 20
       save
     end
 
     def ban_expired?
-      is_banned? && recent_ban.try(:expired?)
+      is_restricted? && recent_ban&.expired?
     end
   end
 
@@ -165,6 +160,11 @@ class User < ApplicationRecord
     extend ActiveSupport::Concern
 
     module ClassMethods
+      # TODO: find_by_name overrides the Rails dynamic finder of the same name (User has a name column).
+      # find_by_name_or_id mimics the Rails dynamic finder naming convention but is purely custom.
+      # name_to_id, name_or_id_to_id, name_or_id_to_id_forced, and id_to_name are also custom with
+      # no Rails equivalent. All predate modern Rails conventions and add caching and custom ID syntax
+      # (e.g. !<id>). Do not rename or remove without understanding the callers first.
       def name_to_id(name)
         normalized_name = normalize_name(name)
         Cache.fetch("uni:#{normalized_name}", expires_in: 4.hours) do
@@ -313,19 +313,52 @@ class User < ApplicationRecord
 
       def anonymous
         user = User.new(name: "Anonymous", created_at: Time.now)
-        user.level = Levels::ANONYMOUS
+        user.level = UserLevel::ANONYMOUS
         user.freeze.readonly!
         user
       end
 
       def level_hash
-        Danbooru.config.levels
+        UserLevel::MAPPING
       end
 
       def level_string(value)
-        Danbooru.config.levels.invert[value] || ""
+        UserLevel::REVERSE_MAPPING[value] || ""
       end
     end
+
+    # Convenience methods for checking user levels
+    # Note that these method names are misleading. "is_janitor?" means "janitor and above can access this".
+    # This is a naming convention that would require a large refactor to change, so we are stuck with it.
+    UserLevel::MAPPING.each do |name, value|
+      normalized_name = UserLevel.normalize(name)
+
+      define_method("is_#{normalized_name}?") do
+        is_verified? && level >= value && id.present?
+      end
+    end
+
+    # Additional access check levels
+
+    def is_logged_in?
+      level > UserLevel::ANONYMOUS
+    end
+
+    def is_logged_out?
+      level == UserLevel::ANONYMOUS
+    end
+    alias is_anonymous? is_logged_out? # Otherwise it will return true for logged in users
+
+    def is_restricted?
+      level == UserLevel::BLOCKED
+    end
+    alias is_banned is_restricted? # Required for API backwards compatibility
+
+    def is_approver?
+      can_approve_posts?
+    end
+
+    ### Other ###
 
     def promote_to!(new_level, options = {})
       UserPromotion.new(self, CurrentUser.user, new_level, options).promote!
@@ -339,36 +372,12 @@ class User < ApplicationRecord
       User.level_string(value || level)
     end
 
-    def is_anonymous?
-      level == Levels::ANONYMOUS
-    end
-
-    def is_blocked?
-      is_banned? || level == Levels::BLOCKED
-    end
-
-    # Defines various convenience methods for finding out the user's level
-    Danbooru.config.levels.each do |name, value|
-      # TODO: HACK: Remove this and make the below logic better to work with the new setup.
-      next if [0, 10].include?(value)
-      normalized_name = name.downcase.tr(" ", "_")
-
-      # Changed from e6 to match new Danbooru semantics.
-      define_method("is_#{normalized_name}?") do
-        is_verified? && level >= value && id.present?
-      end
-    end
-
     def is_bd_staff?
       is_bd_staff
     end
 
     def is_staff?
       is_janitor?
-    end
-
-    def is_approver?
-      can_approve_posts?
     end
 
     def is_artist?
@@ -379,6 +388,16 @@ class User < ApplicationRecord
       if avatar_id.present? && avatar.nil?
         self.avatar_id = nil
       end
+    end
+
+    def clear_cropped_avatar_on_avatar_change
+      return unless saved_change_to_avatar_id?
+      return unless has_cropped_avatar?
+
+      flag = User.flag_value_for("has_cropped_avatar")
+      update_columns(bit_prefs: bit_prefs & ~flag)
+
+      AvatarCleanupJob.perform_later(id)
     end
 
     def staff_cant_disable_dmail
@@ -453,7 +472,7 @@ class User < ApplicationRecord
 
   module ForumMethods
     def has_forum_been_updated?
-      return false unless is_member? && forum_notification_dot
+      return false unless is_logged_in? && forum_notification_dot
       max_updated_at = ForumTopic.visible(self).order(updated_at: :desc).first&.updated_at
       return false if max_updated_at.nil?
       return true if last_forum_read_at.nil?
@@ -575,6 +594,26 @@ class User < ApplicationRecord
     create_user_throttle(
       :ticket_active,
       -> { (Danbooru.config.ticket_active_limit || Float::INFINITY) - Ticket.for_creator(id).active.count },
+      :general_bypass_throttle?,
+      3.days,
+    )
+
+    # Appeal Throttles
+    create_user_throttle(
+      :appeal_hourly,
+      -> { (Danbooru.config.ticket_hourly_limit || Float::INFINITY) - Appeal.for_creator(id).where("created_at > ?", 1.hour.ago).count },
+      :general_bypass_throttle?,
+      3.days,
+    )
+    create_user_throttle(
+      :appeal_daily,
+      -> { (Danbooru.config.ticket_daily_limit || Float::INFINITY) - Appeal.for_creator(id).where("created_at > ?", 1.day.ago).count },
+      :general_bypass_throttle?,
+      3.days,
+    )
+    create_user_throttle(
+      :appeal_active,
+      -> { (Danbooru.config.ticket_active_limit || Float::INFINITY) - Appeal.for_creator(id).active.count },
       :general_bypass_throttle?,
       3.days,
     )
@@ -739,6 +778,7 @@ class User < ApplicationRecord
         post_upload_count post_update_count note_update_count
         is_banned can_approve_posts can_upload_free
         level_string avatar_id is_verified?
+        has_cropped_avatar?
       ]
 
       if id == CurrentUser.user.id
@@ -838,6 +878,10 @@ class User < ApplicationRecord
       user_status&.ticket_count || 0
     end
 
+    def appeal_count
+      user_status&.appeal_count || 0
+    end
+
     def set_count
       user_status&.set_count || 0
     end
@@ -917,7 +961,7 @@ class User < ApplicationRecord
 
   module SearchMethods
     def admins
-      where("level = ?", Levels::ADMIN)
+      where("level = ?", UserLevel::ADMIN)
     end
 
     def with_email(email)
@@ -1045,8 +1089,9 @@ class User < ApplicationRecord
 
   def hide_favorites?
     return false if CurrentUser.is_moderator?
-    return true if is_blocked?
-    enable_privacy_mode? && CurrentUser.user.id != id
+    return false if CurrentUser.user.id == id
+    return true if is_restricted?
+    enable_privacy_mode?
   end
 
   def compact_uploader?
@@ -1086,5 +1131,19 @@ class User < ApplicationRecord
     @feedback_pieces = nil
     @is_artist = nil
     self
+  end
+
+  private
+
+  def enqueue_automod_user_check
+    AutomodUserCheckJob.perform_later(id, check_username: true, check_profile: false)
+  end
+
+  def enqueue_automod_user_update_check
+    AutomodUserCheckJob.perform_later(
+      id,
+      check_username: saved_change_to_name?,
+      check_profile:  saved_change_to_profile_about? || saved_change_to_profile_artinfo?,
+    )
   end
 end

@@ -2,10 +2,11 @@
 
 module ApplicationHelper
   def disable_mobile_mode?
-    if CurrentUser.user.present? && CurrentUser.is_member?
-      return CurrentUser.disable_responsive_mode?
+    if CurrentUser.user.blank? || CurrentUser.user.is_logged_out?
+      return cookies[:nmm].present?
     end
-    cookies[:nmm].present?
+
+    CurrentUser.disable_responsive_mode?
   end
 
   def diff_list_html(new, old, latest)
@@ -131,16 +132,17 @@ module ApplicationHelper
     user_class = user.level_css_class
     user_class += " user-post-approver" if user.can_approve_posts?
     user_class += " user-post-uploader" if user.can_upload_free?
-    user_class += " user-banned" if user.is_banned?
+    user_class += " user-banned" if user.is_restricted?
     user_class += " with-style" if CurrentUser.user.style_usernames?
-    html = link_to(user.pretty_name, user_path(user), class: user_class, rel: "nofollow")
+    html = link_to(user.pretty_name.presence || "<blank>", user_path(user), class: user_class, rel: "nofollow")
     html << " (Unactivated)" if include_activation && !user.is_verified?
     html
   end
 
   def body_attributes(user = CurrentUser.user)
     attributes = %i[id name level level_string can_approve_posts? can_upload_free? per_page]
-    attributes += User::Roles.map { |role| :"is_#{role}?" }
+    attributes += UserLevel::BODY_ATTRIBUTE_ROLES.map { |role| :"is_#{role}?" }
+    attributes += %i[is_anonymous? is_restricted?]
 
     controller_param = params[:controller].parameterize.dasherize
     action_param = params[:action].parameterize.dasherize
@@ -164,16 +166,6 @@ module ApplicationHelper
 
       [:"#{prefix}-#{name}", value]
     end.to_h
-  end
-
-  def user_avatar(user)
-    return "" if user.nil?
-    post_id = user.avatar_id
-    return "" unless post_id
-    deferred_post_ids.add(post_id)
-    tag.div class: "post-thumb placeholder", id: "tp-#{post_id}", data: { id: post_id } do
-      tag.img class: "thumb-img placeholder", src: "/images/thumb-preview.png", height: 150, width: 150
-    end
   end
 
   def unread_dmails(user)
@@ -246,6 +238,22 @@ module ApplicationHelper
     else
       /^#{site_map_path}/
     end
+  end
+
+  VITE_ENTRYPOINTS = Rails.root.glob("app/javascript/entrypoints/v_*.ts")
+                          .to_set { |f| File.basename(f, ".ts") }
+                          .freeze
+
+  def vite_script_for_controller
+    name = "v_#{params[:controller].parameterize.dasherize}"
+    return unless VITE_ENTRYPOINTS.include?(name)
+    vite_javascript_tag("#{name}.ts", nonce: content_security_policy_nonce, defer: false, skip_preload_tags: true)
+  end
+
+  def vite_script_for_controller_and_action
+    name = "v_#{params[:controller].parameterize.dasherize}_#{params[:action].parameterize.dasherize}"
+    return unless VITE_ENTRYPOINTS.include?(name)
+    vite_javascript_tag("#{name}.ts", nonce: content_security_policy_nonce, defer: false, skip_preload_tags: true)
   end
 
   private

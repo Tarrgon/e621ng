@@ -17,6 +17,7 @@ class ApiKeysController < ApplicationController
     respond_with(@api_key)
   end
 
+  # IDEA: Should this return an error status code?
   def create
     params = api_key_params.merge(user: CurrentUser.user)
 
@@ -47,7 +48,7 @@ class ApiKeysController < ApplicationController
 
   def regenerate
     unless @api_key.expired?
-      render_expected_error(:unprocessable_entity, "Only expired API keys can be regenerated")
+      render_expected_error(:unprocessable_content, "Only expired API keys can be regenerated")
       return
     end
 

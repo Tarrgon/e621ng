@@ -25,6 +25,7 @@ class PostReplacement < ApplicationRecord
     end
   end
   validate on: :create do |replacement|
+    next if replacement_file.nil?
     FileValidator.new(replacement, replacement_file.path, test_resolution: !is_backup).validate
     throw :abort if errors.any?
   end
@@ -342,7 +343,7 @@ class PostReplacement < ApplicationRecord
         q = q.where_user(:uploader_id_on_approve, %i[uploader_name_on_approve uploader_id_on_approve], params)
 
         if params[:post_id].present?
-          q = q.where("post_id in (?)", params[:post_id].split(",").first(100).map(&:to_i))
+          q = q.where("post_id in (?)", params[:post_id].split(",").first(Danbooru.config.max_per_page).map(&:to_i))
         end
 
         if params[:reason].present?
@@ -366,14 +367,22 @@ class PostReplacement < ApplicationRecord
           q = q.attribute_matches(:file_name, params[:file_name])
         end
 
-        direction = params[:order] == "id_asc" ? "ASC" : "DESC"
-
-        q.order(Arel.sql("
-          CASE status
-            WHEN 'original' THEN 0
-            ELSE #{table_name}.id
-          END #{direction}
-        "))
+        if params[:order].present?
+          q.apply_basic_order(params)
+        elsif params[:post_id].present?
+          # Backups are created before the first replacement, so id DESC already
+          # sorts them last. This pin only matters for legacy posts whose backup
+          # was created afterwards and thus has a higher id; it keeps the backup
+          # anchored below the replacements in that single-post view.
+          q.order(Arel.sql("
+            CASE status
+              WHEN 'original' THEN 0
+              ELSE #{table_name}.id
+            END DESC
+          "))
+        else
+          q.default_order
+        end
       end
 
       def pending
@@ -405,7 +414,7 @@ class PostReplacement < ApplicationRecord
       end
 
       def visible(user)
-        return where.not(status: "rejected") if user.is_anonymous?
+        return where.not(status: "rejected") if user.is_logged_out?
         return all if user.is_janitor?
         where("creator_id = ? or status != ?", user.id, "rejected")
       end

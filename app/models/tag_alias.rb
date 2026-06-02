@@ -91,6 +91,7 @@ class TagAlias < TagRelationship
   end
 
   def self.to_aliased_query(query, overrides: nil, comments: false)
+    query = query.dup
     # Remove tag types (newline syntax)
     query.gsub!(/(^| )(-)?(#{TagCategory::MAPPING.keys.sort_by { |x| -x.size }.join('|')}):([\S])/i, '\1\2\4')
     # Remove tag types (comma syntax)
@@ -152,61 +153,71 @@ class TagAlias < TagRelationship
   end
 
   def process_undo!(update_topic: true)
-    unless valid?
-      raise errors.full_messages.join("; ")
-    end
+    raise NotImplementedError, "Tag aliases cannot be undone."
 
-    CurrentUser.scoped(approver) do
-      update(status: "pending")
-      update_posts_locked_tags_undo
-      update_blacklists_undo
-      update_posts_undo
-      rename_artist_undo
-      forum_updater.update(retirement_message, "UNDONE") if update_topic
-    end
-    tag_rel_undos.update_all(applied: true)
+    # unless valid?
+    #   raise errors.full_messages.join("; ")
+    # end
+    #
+    # CurrentUser.scoped(approver) do
+    #   update(status: "pending")
+    #   update_posts_locked_tags_undo
+    #   update_blacklists_undo
+    #   update_posts_undo
+    #   rename_artist_undo
+    #   forum_updater.update(retirement_message, "UNDONE") if update_topic
+    # end
+    # tag_rel_undos.update_all(applied: true)
   end
 
   def update_posts_locked_tags_undo
-    Post.without_timeout do
-      Post.where_ilike(:locked_tags, "*#{consequent_name}*").find_each(batch_size: 50) do |post|
-        fixed_tags = TagAlias.to_aliased_query(post.locked_tags, overrides: { consequent_name => antecedent_name })
-        post.update_column(:locked_tags, fixed_tags)
-      end
-    end
+    raise NotImplementedError, "Tag aliases cannot be undone."
+
+    # Post.without_timeout do
+    #   Post.where_ilike(:locked_tags, "*#{consequent_name}*").find_each(batch_size: 50) do |post|
+    #     fixed_tags = TagAlias.to_aliased_query(post.locked_tags, overrides: { consequent_name => antecedent_name })
+    #     post.update_column(:locked_tags, fixed_tags)
+    #   end
+    # end
   end
 
   def update_blacklists_undo
-    User.without_timeout do
-      User.where_ilike(:blacklisted_tags, "*#{consequent_name}*").find_each(batch_size: 50) do |user|
-        fixed_blacklist = TagAlias.to_aliased_query(user.blacklisted_tags, overrides: { consequent_name => antecedent_name }, comments: true)
-        user.update_column(:blacklisted_tags, fixed_blacklist)
-      end
-    end
+    raise NotImplementedError, "Tag aliases cannot be undone."
+
+    # User.without_timeout do
+    #   User.where_ilike(:blacklisted_tags, "*#{consequent_name}*").find_each(batch_size: 50) do |user|
+    #     fixed_blacklist = TagAlias.to_aliased_query(user.blacklisted_tags, overrides: { consequent_name => antecedent_name }, comments: true)
+    #     user.update_column(:blacklisted_tags, fixed_blacklist)
+    #   end
+    # end
   end
 
   def update_posts_undo
-    Post.without_timeout do
-      tag_rel_undos.where(applied: false).each do |tu|
-        Post.where(id: tu.undo_data).find_each do |post|
-          post.do_not_version_changes = true
-          post.tag_string_diff = "-#{consequent_name} #{antecedent_name}"
-          post.save
-        end
-      end
+    raise NotImplementedError, "Tag aliases cannot be undone."
 
-      # TODO: Race condition with indexing jobs here.
-      antecedent_tag.fix_post_count if antecedent_tag
-      consequent_tag.fix_post_count if consequent_tag
-    end
+    # Thread.current[:skip_post_index_update] = true
+    # Post.without_timeout do
+    #   tag_rel_undos.where(applied: false).each do |tu|
+    #     Post.where(id: tu.undo_data).find_each do |post|
+    #       post.do_not_version_changes = true
+    #       post.tag_string_diff = "-#{consequent_name} #{antecedent_name}"
+    #       post.save
+    #     end
+    #   end
+    # end
+    # TagAliasFinalizeJob.perform_later(id, antecedent_name)
+  ensure
+    Thread.current[:skip_post_index_update] = false
   end
 
   def rename_artist_undo
-    if consequent_tag.category == Tag.categories.artist
-      if consequent_tag.artist.present? && antecedent_tag.artist.blank?
-        consequent_tag.artist.update!(name: antecedent_name)
-      end
-    end
+    raise NotImplementedError, "Tag aliases cannot be undone."
+
+    # if consequent_tag.category == Tag.categories.artist
+    #   if consequent_tag.artist.present? && antecedent_tag.artist.blank?
+    #     consequent_tag.artist.update!(name: antecedent_name)
+    #   end
+    # end
   end
 
   def process!(update_topic: true)
@@ -223,10 +234,8 @@ class TagAlias < TagRelationship
         update_posts
         rename_artist
         forum_updater.update(approval_message(approver), "APPROVED") if update_topic
-        update(status: 'active', post_count: consequent_tag.post_count)
-        # TODO: Race condition with indexing jobs here.
-        antecedent_tag.fix_post_count if antecedent_tag
-        consequent_tag.fix_post_count if consequent_tag
+        update(status: "active", post_count: consequent_tag&.post_count || 0)
+        TagAliasFinalizeJob.perform_later(id)
       end
     rescue Exception => e
       Rails.logger.error("[TA] #{e.message}\n#{e.backtrace}")
@@ -240,6 +249,7 @@ class TagAlias < TagRelationship
         forum_updater.update(failure_message(e), "FAILED") if update_topic
         update_columns(status: "error: #{e}")
       end
+      TagAliasFinalizeJob.perform_later(id)
     end
   end
 
@@ -256,27 +266,27 @@ class TagAlias < TagRelationship
   def move_aliases_and_implications
     aliases = TagAlias.where(["consequent_name = ?", antecedent_name])
     aliases.each do |ta|
-      ta.consequent_name = self.consequent_name
+      ta.consequent_name = consequent_name
       success = ta.save
-      if !success && ta.errors.full_messages.join("; ") =~ /Cannot alias a tag to itself/
+      if !success && ta.errors.full_messages.join("; ") =~ /Cannot alias or implicate a tag to itself/
         ta.destroy
       end
     end
 
     implications = TagImplication.where(["antecedent_name = ?", antecedent_name])
     implications.each do |ti|
-      ti.antecedent_name = self.consequent_name
+      ti.antecedent_name = consequent_name
       success = ti.save
-      if !success && ti.errors.full_messages.join("; ") =~ /Cannot implicate a tag to itself/
+      if !success && ti.errors.full_messages.join("; ") =~ /Cannot alias or implicate a tag to itself/
         ti.destroy
       end
     end
 
     implications = TagImplication.where(["consequent_name = ?", antecedent_name])
     implications.each do |ti|
-      ti.consequent_name = self.consequent_name
+      ti.consequent_name = consequent_name
       success = ti.save
-      if !success && ti.errors.full_messages.join("; ") =~ /Cannot implicate a tag to itself/
+      if !success && ti.errors.full_messages.join("; ") =~ /Cannot alias or implicate a tag to itself/
         ti.destroy
       end
     end
@@ -362,5 +372,9 @@ class TagAlias < TagRelationship
 
       ModAction.log(:tag_alias_update, {alias_id: id, alias_desc: alias_desc, change_desc: change_desc})
     end
+  end
+
+  def dtext_label
+    "[ta:#{id}]"
   end
 end

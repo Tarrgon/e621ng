@@ -3,18 +3,19 @@
 class PostsController < ApplicationController
   include JsonResponseHelper
 
-  before_action :member_only, except: %i[show show_seq index random recommended]
+  before_action :member_only, except: %i[show show_seq index random]
   before_action :admin_only, only: [:update_iqdb]
-  before_action :ensure_lockdown_disabled, except: %i[index show show_seq random recommended]
+  before_action :ensure_lockdown_disabled, except: %i[index show show_seq random]
   respond_to :html, :json
 
   def index
+    params[:md5] = nil unless params[:md5].is_a?(String)
     if params[:md5].present?
       @post = Post.find_by!(md5: params[:md5])
       respond_with(@post) do |format|
         format.html { redirect_to post_path(@post) }
         format.json do
-          render_posts_json(PostBlueprint.render_as_hash(@post))
+          pick_json_format(@post, legacy: params[:v2] != "true", mode: params[:mode], collection: false)
         end
       end
     else
@@ -53,7 +54,7 @@ class PostsController < ApplicationController
 
       respond_with(@posts) do |format|
         format.json do
-          render_posts_json(PostBlueprint.render_as_hash(@post_set.api_posts), collection: true)
+          pick_json_format(@post_set.api_posts, legacy: params[:v2] != "true", mode: params[:mode])
         end
         format.atom
       end
@@ -65,6 +66,10 @@ class PostsController < ApplicationController
 
     raise User::PrivilegeError, "Post unavailable" unless Security::Lockdown.post_visible?(@post, CurrentUser.user)
 
+    # Parse params
+    @current_set_id = params[:post_set_id].to_i if params[:post_set_id].is_a?(String)
+    @current_pool_id = params[:pool_id].to_i if params[:pool_id].is_a?(String)
+
     include_deleted = @post.is_deleted? || (@post.parent_id.present? && @post.parent.is_deleted?) || CurrentUser.is_approver?
     @parent_post_set = PostSets::PostRelationship.new(@post.parent_id, include_deleted: include_deleted, want_parent: true)
     @children_post_set = PostSets::PostRelationship.new(@post.id, include_deleted: include_deleted, want_parent: false)
@@ -72,16 +77,15 @@ class PostsController < ApplicationController
     @has_samples = @post.is_image? || @post.video_sample_list[:has]
 
     if request.format.html? && @post.comment_count > 0
-      @comments = @post.comments.above_threshold.includes(:creator, :updater)
-      @comment_votes = CommentVote.for_comments_and_user(@comments.map(&:id), CurrentUser.id)
+      @comments = @post.comments.above_threshold.includes(:creator, :updater).to_a
+      Comment.preload_vote_by!(@comments, CurrentUser.id) unless CurrentUser.user&.is_logged_out?
     else
       @comments = Comment.none
-      @comment_votes = CommentVote.none
     end
 
     respond_with(@post) do |format|
       format.json do
-        render_posts_json(PostBlueprint.render_as_hash(@post))
+        pick_json_format(@post, legacy: params[:v2] != "true", mode: params[:mode], collection: false)
       end
     end
   end
@@ -91,16 +95,19 @@ class PostsController < ApplicationController
 
     raise User::PrivilegeError, "Post unavailable" unless Security::Lockdown.post_visible?(@post, CurrentUser.user)
 
+    # Parse params
+    params[:post_set_id] = params[:post_set_id].is_a?(String) ? params[:post_set_id].to_i : nil
+    params[:pool_id] = params[:pool_id].is_a?(String) ? params[:pool_id].to_i : nil
+
     include_deleted = @post.is_deleted? || (@post.parent_id.present? && @post.parent.is_deleted?) || CurrentUser.is_approver?
     @parent_post_set = PostSets::PostRelationship.new(@post.parent_id, include_deleted: include_deleted, want_parent: true)
     @children_post_set = PostSets::PostRelationship.new(@post.id, include_deleted: include_deleted, want_parent: false)
 
     if request.format.html? && @post.comment_count > 0
-      @comments = @post.comments.above_threshold.includes(:creator, :updater)
-      @comment_votes = CommentVote.for_comments_and_user(@comments.map(&:id), CurrentUser.id)
+      @comments = @post.comments.above_threshold.includes(:creator, :updater).to_a
+      Comment.preload_vote_by!(@comments, CurrentUser.id) unless CurrentUser.user&.is_logged_out?
     else
       @comments = Comment.none
-      @comment_votes = CommentVote.none
     end
 
     @fixup_post_url = true
@@ -108,7 +115,7 @@ class PostsController < ApplicationController
     respond_with(@post) do |format|
       format.html { render "posts/show" }
       format.json do
-        render_posts_json(PostBlueprint.render_as_hash(@post))
+        pick_json_format(@post, legacy: params[:v2] != "true", mode: params[:mode], collection: false)
       end
     end
   end
@@ -155,37 +162,9 @@ class PostsController < ApplicationController
     respond_with(@post) do |format|
       format.html { redirect_to post_path(@post, q: params[:tags]) }
       format.json do
-        render_posts_json(PostBlueprint.render_as_hash(@post))
+        pick_json_format(@post, legacy: params[:v2] != "true", mode: params[:mode], collection: false)
       end
     end
-  end
-
-  def recommended
-    @original_post = Post.find(params[:id])
-    unless Security::Lockdown.post_visible?(@original_post, CurrentUser.user)
-      render json: {
-        post_id: @original_post.id,
-        model_version: "opensearch",
-        results: [],
-      }
-      return
-    end
-
-    post_ids = Cache.fetch("post_recommendations:#{@original_post.id}:#{params[:page]}:#{params[:limit]}:#{CurrentUser.safe_mode? ? 's' : 'e'}", expires_in: 15.minutes) do
-      PostSets::Recommended.new(@original_post, params[:page], limit: params[:limit]).post_ids
-    end
-    # Matches the format of the recommendation engine
-    render json: {
-      post_id: @original_post.id,
-      model_version: "opensearch",
-      results: post_ids.map do |id|
-        {
-          post_id: id,
-          score: 1,
-          explanation: nil,
-        }
-      end,
-    }
   end
 
   def mark_as_translated
@@ -247,7 +226,7 @@ class PostsController < ApplicationController
       end
 
       format.json do
-        render_posts_json(PostBlueprint.render_as_hash(post))
+        pick_json_format(post, legacy: params[:v2] != "true", mode: params[:mode], collection: false)
       end
     end
   end
