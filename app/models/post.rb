@@ -33,7 +33,7 @@ class Post < ApplicationRecord
   validate :updater_can_change_rating
   before_save :update_tag_post_counts, if: :should_process_tags?
   before_save :set_tag_counts, if: :should_process_tags?
-  after_create :check_for_ai_content, if: -> { Danbooru.config.auto_flag_ai_posts? }
+  after_create :check_for_ai_content, if: -> { Setting.automatic_ai_check? }
   after_save :create_post_events
   after_save :create_version
   after_save :update_parent_on_save
@@ -89,6 +89,7 @@ class Post < ApplicationRecord
     def delete_avatar_crops
       User.where(avatar_id: id).pluck(:id).each do |user_id|
         AvatarCleanupJob.perform_later(user_id, force: true)
+        UserAvatarUrlCache.invalidate(user_id)
       end
     end
 
@@ -273,7 +274,7 @@ class Post < ApplicationRecord
           sample_data[:original] = video_samples["original"]
 
           sample_data[:variants] = {}
-          sample_data[:has] = true if video_samples["variants"].present?
+          sample_data[:has] = true if video_samples["original"]["codec"].present?
           video_samples["variants"].each do |name, video|
             sample_data[:variants][name] = video
             sample_data[:variants][name][:codec] = name == "mp4" ? "avc1.4D401E" : "vp9"
@@ -364,7 +365,7 @@ class Post < ApplicationRecord
       if ai_score[:score] >= 50
         PostFlag.create(
           post: self,
-          reason_name: Danbooru.config.check_for_ai_content_flag_reason,
+          reason_name: Setting.ai_flag_reason,
           note: "AI score: #{ai_score[:score]}\n#{ai_score[:reason]}",
           creator_id: User.system.id,
           creator_ip_addr: "192.168.0.1",
@@ -1712,6 +1713,7 @@ class Post < ApplicationRecord
         PostEvent.add(id, CurrentUser.user, :undeleted)
       end
       move_files_on_undelete
+      User.where(avatar_id: id).pluck(:id).each { |uid| UserAvatarUrlCache.invalidate(uid) }
       UserStatus.for_user(uploader_id).update_all("post_deleted_count = post_deleted_count - 1")
     end
 
