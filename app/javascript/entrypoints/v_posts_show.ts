@@ -5,6 +5,7 @@ declare const E621: E621Type;
 
 import "@/pages/comments/comments";
 import "@/pages/posts/show/AddToPoolDialog";
+import "@/pages/posts/show/BlacklistRevealOnClick";
 import "@/pages/posts/show/MobileTabs";
 import "@/pages/posts/show/mod_queue";
 import Note from "@/pages/posts/show/notes";
@@ -14,6 +15,8 @@ import "@/pages/posts/show/recommended";
 import "@/pages/posts/show/related_tag";
 import "@/pages/posts/show/SwipeGestureHandler";
 
+import PostReowner from "@/pages/moderator/post/posts/PostReowner";
+
 import "@/pages/post_flags/post_flags"; // We only need expandable notes from here
 
 E621.Registry.register("v_posts_show", { Note });
@@ -21,4 +24,5 @@ E621.Registry.register("v_posts_show", { Note });
 $(() => {
   PostSet.initialize_add_to_set_link();
   PostSet.initialize_remove_from_set_links();
+  PostReowner.initialize_links();
 });

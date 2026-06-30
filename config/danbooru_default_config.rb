@@ -92,6 +92,11 @@ module Danbooru
       []
     end
 
+    # Autocomplete results matching these regular expressions will not be displayed.
+    def default_autocomplete_blacklist
+      []
+    end
+
     def safeblocked_tags
       []
     end
@@ -104,6 +109,10 @@ module Danbooru
 
     def ffprobe_path
       "/usr/bin/ffprobe"
+    end
+
+    def default_bg_color
+      "152f56"
     end
 
     # Thumbnail size
@@ -143,6 +152,24 @@ module Danbooru
 
     def replacement_file_secret
       "abc123"
+    end
+
+    def staff_file_path_prefix
+      "staff_files"
+    end
+
+    def staff_file_secret
+      "abc123"
+    end
+
+    # Maximum size of a file uploaded to the staff file store.
+    def staff_file_max_size
+      100.megabytes
+    end
+
+    # File extensions staff are allowed to upload to the staff file store.
+    def staff_file_allowed_extensions
+      %w[jpg png gif webp mp4 webm txt log csv json zip 7z]
     end
 
     def deleted_preview_url
@@ -638,7 +665,7 @@ You can see a list of your deleted posts \"here\":[/deleted_posts?user_id=%UPLOA
     end
 
     def can_user_see_post?(user, post)
-      return false if post.is_deleted? && !user.is_janitor?
+      return false if post.is_deleted? && !user.is_staff?
       !(is_user_restricted?(user) && is_post_restricted?(post))
     end
 
@@ -696,6 +723,31 @@ You can see a list of your deleted posts \"here\":[/deleted_posts?user_id=%UPLOA
     end
 
     def iqdb_server
+    end
+
+    def iqdb_read_timeout
+      5
+    end
+
+    # This should be set to a value lower than half of the total number of pitchfork workers.
+    def iqdb_max_concurrent_queries
+      20
+    end
+
+    def iqdb_circuit_failure_threshold
+      10
+    end
+
+    def iqdb_circuit_failure_window
+      60
+    end
+
+    def iqdb_circuit_cooldown
+      30
+    end
+
+    def iqdb_anon_lockdown_duration
+      3600
     end
 
     def opensearch_host

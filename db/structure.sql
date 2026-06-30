@@ -556,7 +556,8 @@ CREATE TABLE public.db_exports (
     name character varying NOT NULL,
     file_size bigint DEFAULT 0 NOT NULL,
     created_at timestamp(6) without time zone NOT NULL,
-    updated_at timestamp(6) without time zone NOT NULL
+    updated_at timestamp(6) without time zone NOT NULL,
+    checksum character varying
 );
 
 
@@ -1292,6 +1293,155 @@ CREATE SEQUENCE public.notes_id_seq
 --
 
 ALTER SEQUENCE public.notes_id_seq OWNED BY public.notes.id;
+
+
+--
+-- Name: oauth_access_grants; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.oauth_access_grants (
+    id bigint NOT NULL,
+    resource_owner_id bigint NOT NULL,
+    application_id bigint NOT NULL,
+    token character varying NOT NULL,
+    expires_in integer NOT NULL,
+    redirect_uri text NOT NULL,
+    scopes character varying DEFAULT ''::character varying NOT NULL,
+    revoked_at timestamp(6) without time zone,
+    code_challenge character varying,
+    code_challenge_method character varying,
+    created_at timestamp(6) without time zone NOT NULL,
+    updated_at timestamp(6) without time zone NOT NULL
+);
+
+
+--
+-- Name: oauth_access_grants_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.oauth_access_grants_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: oauth_access_grants_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.oauth_access_grants_id_seq OWNED BY public.oauth_access_grants.id;
+
+
+--
+-- Name: oauth_access_tokens; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.oauth_access_tokens (
+    id bigint NOT NULL,
+    resource_owner_id bigint,
+    application_id bigint NOT NULL,
+    token character varying NOT NULL,
+    refresh_token character varying,
+    expires_in integer,
+    scopes character varying,
+    revoked_at timestamp(6) without time zone,
+    previous_refresh_token character varying DEFAULT ''::character varying NOT NULL,
+    last_used_at timestamp(6) without time zone,
+    created_at timestamp(6) without time zone NOT NULL,
+    updated_at timestamp(6) without time zone NOT NULL
+);
+
+
+--
+-- Name: oauth_access_tokens_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.oauth_access_tokens_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: oauth_access_tokens_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.oauth_access_tokens_id_seq OWNED BY public.oauth_access_tokens.id;
+
+
+--
+-- Name: oauth_applications; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.oauth_applications (
+    id bigint NOT NULL,
+    name character varying NOT NULL,
+    uid character varying NOT NULL,
+    secret character varying NOT NULL,
+    redirect_uri text NOT NULL,
+    scopes character varying DEFAULT ''::character varying NOT NULL,
+    confidential boolean DEFAULT true NOT NULL,
+    owner_type character varying,
+    owner_id bigint,
+    description text,
+    homepage_url character varying,
+    minimum_user_level integer DEFAULT 0 NOT NULL,
+    created_at timestamp(6) without time zone NOT NULL,
+    updated_at timestamp(6) without time zone NOT NULL
+);
+
+
+--
+-- Name: oauth_applications_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.oauth_applications_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: oauth_applications_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.oauth_applications_id_seq OWNED BY public.oauth_applications.id;
+
+
+--
+-- Name: oauth_openid_requests; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.oauth_openid_requests (
+    id bigint NOT NULL,
+    access_grant_id bigint NOT NULL,
+    nonce character varying NOT NULL
+);
+
+
+--
+-- Name: oauth_openid_requests_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.oauth_openid_requests_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: oauth_openid_requests_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.oauth_openid_requests_id_seq OWNED BY public.oauth_openid_requests.id;
 
 
 --
@@ -2064,6 +2214,44 @@ ALTER SEQUENCE public.staff_audit_logs_id_seq OWNED BY public.staff_audit_logs.i
 
 
 --
+-- Name: staff_files; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.staff_files (
+    id bigint NOT NULL,
+    creator_id integer NOT NULL,
+    storage_id character varying NOT NULL,
+    md5 character varying NOT NULL,
+    file_ext character varying NOT NULL,
+    file_size integer NOT NULL,
+    original_filename character varying NOT NULL,
+    title character varying,
+    description text,
+    created_at timestamp(6) without time zone NOT NULL,
+    updated_at timestamp(6) without time zone NOT NULL
+);
+
+
+--
+-- Name: staff_files_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.staff_files_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: staff_files_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.staff_files_id_seq OWNED BY public.staff_files.id;
+
+
+--
 -- Name: staff_notes; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -2096,6 +2284,110 @@ CREATE SEQUENCE public.staff_notes_id_seq
 --
 
 ALTER SEQUENCE public.staff_notes_id_seq OWNED BY public.staff_notes.id;
+
+
+--
+-- Name: staff_wiki_refs; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.staff_wiki_refs (
+    id bigint NOT NULL,
+    staff_wiki_id integer NOT NULL,
+    related_id integer NOT NULL,
+    related_type character varying NOT NULL,
+    created_at timestamp(6) without time zone NOT NULL,
+    updated_at timestamp(6) without time zone NOT NULL
+);
+
+
+--
+-- Name: staff_wiki_refs_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.staff_wiki_refs_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: staff_wiki_refs_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.staff_wiki_refs_id_seq OWNED BY public.staff_wiki_refs.id;
+
+
+--
+-- Name: staff_wiki_versions; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.staff_wiki_versions (
+    id bigint NOT NULL,
+    staff_wiki_id integer NOT NULL,
+    updater_id integer NOT NULL,
+    claimant_id integer,
+    updater_ip_addr inet NOT NULL,
+    title character varying NOT NULL,
+    body text DEFAULT ''::text NOT NULL,
+    created_at timestamp(6) without time zone NOT NULL,
+    updated_at timestamp(6) without time zone NOT NULL
+);
+
+
+--
+-- Name: staff_wiki_versions_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.staff_wiki_versions_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: staff_wiki_versions_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.staff_wiki_versions_id_seq OWNED BY public.staff_wiki_versions.id;
+
+
+--
+-- Name: staff_wikis; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.staff_wikis (
+    id bigint NOT NULL,
+    creator_id integer NOT NULL,
+    updater_id integer NOT NULL,
+    claimant_id integer,
+    title character varying NOT NULL,
+    body text DEFAULT ''::text NOT NULL,
+    created_at timestamp(6) without time zone NOT NULL,
+    updated_at timestamp(6) without time zone NOT NULL
+);
+
+
+--
+-- Name: staff_wikis_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.staff_wikis_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: staff_wikis_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.staff_wikis_id_seq OWNED BY public.staff_wikis.id;
 
 
 --
@@ -2982,6 +3274,34 @@ ALTER TABLE ONLY public.notes ALTER COLUMN id SET DEFAULT nextval('public.notes_
 
 
 --
+-- Name: oauth_access_grants id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.oauth_access_grants ALTER COLUMN id SET DEFAULT nextval('public.oauth_access_grants_id_seq'::regclass);
+
+
+--
+-- Name: oauth_access_tokens id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.oauth_access_tokens ALTER COLUMN id SET DEFAULT nextval('public.oauth_access_tokens_id_seq'::regclass);
+
+
+--
+-- Name: oauth_applications id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.oauth_applications ALTER COLUMN id SET DEFAULT nextval('public.oauth_applications_id_seq'::regclass);
+
+
+--
+-- Name: oauth_openid_requests id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.oauth_openid_requests ALTER COLUMN id SET DEFAULT nextval('public.oauth_openid_requests_id_seq'::regclass);
+
+
+--
 -- Name: pool_versions id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -3122,10 +3442,38 @@ ALTER TABLE ONLY public.staff_audit_logs ALTER COLUMN id SET DEFAULT nextval('pu
 
 
 --
+-- Name: staff_files id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.staff_files ALTER COLUMN id SET DEFAULT nextval('public.staff_files_id_seq'::regclass);
+
+
+--
 -- Name: staff_notes id; Type: DEFAULT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.staff_notes ALTER COLUMN id SET DEFAULT nextval('public.staff_notes_id_seq'::regclass);
+
+
+--
+-- Name: staff_wiki_refs id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.staff_wiki_refs ALTER COLUMN id SET DEFAULT nextval('public.staff_wiki_refs_id_seq'::regclass);
+
+
+--
+-- Name: staff_wiki_versions id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.staff_wiki_versions ALTER COLUMN id SET DEFAULT nextval('public.staff_wiki_versions_id_seq'::regclass);
+
+
+--
+-- Name: staff_wikis id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.staff_wikis ALTER COLUMN id SET DEFAULT nextval('public.staff_wikis_id_seq'::regclass);
 
 
 --
@@ -3521,6 +3869,38 @@ ALTER TABLE ONLY public.notes
 
 
 --
+-- Name: oauth_access_grants oauth_access_grants_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.oauth_access_grants
+    ADD CONSTRAINT oauth_access_grants_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: oauth_access_tokens oauth_access_tokens_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.oauth_access_tokens
+    ADD CONSTRAINT oauth_access_tokens_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: oauth_applications oauth_applications_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.oauth_applications
+    ADD CONSTRAINT oauth_applications_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: oauth_openid_requests oauth_openid_requests_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.oauth_openid_requests
+    ADD CONSTRAINT oauth_openid_requests_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: pool_versions pool_versions_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -3683,11 +4063,43 @@ ALTER TABLE ONLY public.staff_audit_logs
 
 
 --
+-- Name: staff_files staff_files_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.staff_files
+    ADD CONSTRAINT staff_files_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: staff_notes staff_notes_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.staff_notes
     ADD CONSTRAINT staff_notes_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: staff_wiki_refs staff_wiki_refs_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.staff_wiki_refs
+    ADD CONSTRAINT staff_wiki_refs_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: staff_wiki_versions staff_wiki_versions_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.staff_wiki_versions
+    ADD CONSTRAINT staff_wiki_versions_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: staff_wikis staff_wikis_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.staff_wikis
+    ADD CONSTRAINT staff_wikis_pkey PRIMARY KEY (id);
 
 
 --
@@ -4498,6 +4910,76 @@ CREATE INDEX index_notes_on_to_tsvector_english_body ON public.notes USING gin (
 
 
 --
+-- Name: index_oauth_access_grants_on_application_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_oauth_access_grants_on_application_id ON public.oauth_access_grants USING btree (application_id);
+
+
+--
+-- Name: index_oauth_access_grants_on_resource_owner_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_oauth_access_grants_on_resource_owner_id ON public.oauth_access_grants USING btree (resource_owner_id);
+
+
+--
+-- Name: index_oauth_access_grants_on_token; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX index_oauth_access_grants_on_token ON public.oauth_access_grants USING btree (token);
+
+
+--
+-- Name: index_oauth_access_tokens_on_application_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_oauth_access_tokens_on_application_id ON public.oauth_access_tokens USING btree (application_id);
+
+
+--
+-- Name: index_oauth_access_tokens_on_refresh_token; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX index_oauth_access_tokens_on_refresh_token ON public.oauth_access_tokens USING btree (refresh_token);
+
+
+--
+-- Name: index_oauth_access_tokens_on_resource_owner_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_oauth_access_tokens_on_resource_owner_id ON public.oauth_access_tokens USING btree (resource_owner_id);
+
+
+--
+-- Name: index_oauth_access_tokens_on_token; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX index_oauth_access_tokens_on_token ON public.oauth_access_tokens USING btree (token);
+
+
+--
+-- Name: index_oauth_applications_on_owner; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_oauth_applications_on_owner ON public.oauth_applications USING btree (owner_type, owner_id);
+
+
+--
+-- Name: index_oauth_applications_on_uid; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX index_oauth_applications_on_uid ON public.oauth_applications USING btree (uid);
+
+
+--
+-- Name: index_oauth_openid_requests_on_access_grant_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_oauth_openid_requests_on_access_grant_id ON public.oauth_openid_requests USING btree (access_grant_id);
+
+
+--
 -- Name: index_pool_versions_on_pool_id; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -4898,6 +5380,27 @@ CREATE INDEX index_staff_audit_logs_on_user_id ON public.staff_audit_logs USING 
 
 
 --
+-- Name: index_staff_files_on_creator_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_staff_files_on_creator_id ON public.staff_files USING btree (creator_id);
+
+
+--
+-- Name: index_staff_files_on_md5; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_staff_files_on_md5 ON public.staff_files USING btree (md5);
+
+
+--
+-- Name: index_staff_files_on_storage_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX index_staff_files_on_storage_id ON public.staff_files USING btree (storage_id);
+
+
+--
 -- Name: index_staff_notes_on_creator_id; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -4916,6 +5419,41 @@ CREATE INDEX index_staff_notes_on_updater_id ON public.staff_notes USING btree (
 --
 
 CREATE INDEX index_staff_notes_on_user_id ON public.staff_notes USING btree (user_id);
+
+
+--
+-- Name: index_staff_wiki_refs_on_related_id_and_related_type; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_staff_wiki_refs_on_related_id_and_related_type ON public.staff_wiki_refs USING btree (related_id, related_type);
+
+
+--
+-- Name: index_staff_wiki_refs_on_staff_wiki_and_related; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX index_staff_wiki_refs_on_staff_wiki_and_related ON public.staff_wiki_refs USING btree (staff_wiki_id, related_id, related_type);
+
+
+--
+-- Name: index_staff_wiki_versions_on_staff_wiki_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_staff_wiki_versions_on_staff_wiki_id ON public.staff_wiki_versions USING btree (staff_wiki_id);
+
+
+--
+-- Name: index_staff_wiki_versions_on_updater_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_staff_wiki_versions_on_updater_id ON public.staff_wiki_versions USING btree (updater_id);
+
+
+--
+-- Name: index_staff_wikis_on_lower_title; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX index_staff_wikis_on_lower_title ON public.staff_wikis USING btree (lower((title)::text));
 
 
 --
@@ -5316,6 +5854,30 @@ ALTER TABLE ONLY public.blips
 
 
 --
+-- Name: staff_wiki_refs fk_rails_2cd6b3a2eb; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.staff_wiki_refs
+    ADD CONSTRAINT fk_rails_2cd6b3a2eb FOREIGN KEY (staff_wiki_id) REFERENCES public.staff_wikis(id) ON DELETE CASCADE;
+
+
+--
+-- Name: staff_wiki_versions fk_rails_317c9a4443; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.staff_wiki_versions
+    ADD CONSTRAINT fk_rails_317c9a4443 FOREIGN KEY (claimant_id) REFERENCES public.users(id);
+
+
+--
+-- Name: oauth_access_grants fk_rails_330c32d8d9; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.oauth_access_grants
+    ADD CONSTRAINT fk_rails_330c32d8d9 FOREIGN KEY (resource_owner_id) REFERENCES public.users(id);
+
+
+--
 -- Name: appeals fk_rails_3f7cd477a6; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -5340,6 +5902,14 @@ ALTER TABLE ONLY public.avoid_posting_versions
 
 
 --
+-- Name: staff_wiki_versions fk_rails_4dad911f81; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.staff_wiki_versions
+    ADD CONSTRAINT fk_rails_4dad911f81 FOREIGN KEY (updater_id) REFERENCES public.users(id);
+
+
+--
 -- Name: appeals fk_rails_4ed6a7befb; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -5356,11 +5926,51 @@ ALTER TABLE ONLY public.appeals
 
 
 --
+-- Name: oauth_access_tokens fk_rails_732cb83ab7; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.oauth_access_tokens
+    ADD CONSTRAINT fk_rails_732cb83ab7 FOREIGN KEY (application_id) REFERENCES public.oauth_applications(id);
+
+
+--
+-- Name: oauth_openid_requests fk_rails_77114b3b09; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.oauth_openid_requests
+    ADD CONSTRAINT fk_rails_77114b3b09 FOREIGN KEY (access_grant_id) REFERENCES public.oauth_access_grants(id) ON DELETE CASCADE;
+
+
+--
+-- Name: staff_wikis fk_rails_7c286bc172; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.staff_wikis
+    ADD CONSTRAINT fk_rails_7c286bc172 FOREIGN KEY (updater_id) REFERENCES public.users(id);
+
+
+--
+-- Name: staff_files fk_rails_804a297dc9; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.staff_files
+    ADD CONSTRAINT fk_rails_804a297dc9 FOREIGN KEY (creator_id) REFERENCES public.users(id);
+
+
+--
 -- Name: user_feedback fk_rails_9329a36823; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.user_feedback
     ADD CONSTRAINT fk_rails_9329a36823 FOREIGN KEY (updater_id) REFERENCES public.users(id);
+
+
+--
+-- Name: staff_wikis fk_rails_949cd2810d; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.staff_wikis
+    ADD CONSTRAINT fk_rails_949cd2810d FOREIGN KEY (creator_id) REFERENCES public.users(id);
 
 
 --
@@ -5396,6 +6006,14 @@ ALTER TABLE ONLY public.avoid_postings
 
 
 --
+-- Name: oauth_access_grants fk_rails_b4b53e07b8; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.oauth_access_grants
+    ADD CONSTRAINT fk_rails_b4b53e07b8 FOREIGN KEY (application_id) REFERENCES public.oauth_applications(id);
+
+
+--
 -- Name: staff_notes fk_rails_bab7e2d92a; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -5428,6 +6046,22 @@ ALTER TABLE ONLY public.avoid_postings
 
 
 --
+-- Name: staff_wiki_versions fk_rails_ce7d15f8f4; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.staff_wiki_versions
+    ADD CONSTRAINT fk_rails_ce7d15f8f4 FOREIGN KEY (staff_wiki_id) REFERENCES public.staff_wikis(id) ON DELETE CASCADE;
+
+
+--
+-- Name: staff_wikis fk_rails_d05de95362; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.staff_wikis
+    ADD CONSTRAINT fk_rails_d05de95362 FOREIGN KEY (claimant_id) REFERENCES public.users(id);
+
+
+--
 -- Name: favorites fk_rails_d20e53bb68; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -5452,12 +6086,25 @@ ALTER TABLE ONLY public.staff_notes
 
 
 --
+-- Name: oauth_access_tokens fk_rails_ee63f25419; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.oauth_access_tokens
+    ADD CONSTRAINT fk_rails_ee63f25419 FOREIGN KEY (resource_owner_id) REFERENCES public.users(id);
+
+
+--
 -- PostgreSQL database dump complete
 --
 
 SET search_path TO "$user", public;
 
 INSERT INTO "schema_migrations" (version) VALUES
+('20260624213023'),
+('20260622142717'),
+('20260617120000'),
+('20260615155147'),
+('20260612160840'),
 ('20260608170029'),
 ('20260530165214'),
 ('20260530162738'),

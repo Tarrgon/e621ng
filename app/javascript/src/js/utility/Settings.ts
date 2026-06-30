@@ -3,7 +3,8 @@ const _get = function () {
   if (loaded) return _data;
   try {
     const base64 = document.getElementById("site-settings").textContent;
-    const json = atob(base64);
+    const bytes = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
+    const json = new TextDecoder().decode(bytes);
     _data = JSON.parse(json);
     loaded = true;
     return _data;
@@ -31,6 +32,9 @@ const Settings = {} as {
       search_trend: boolean,
     }
   },
+  Autocomplete: {
+    blacklist: RegExp[],
+  },
   Posts: {
     webp_enabled: boolean,
   },
@@ -49,6 +53,28 @@ Object.defineProperty(Settings, "Analytics", {
       },
     };
     Object.defineProperty(Settings, "Analytics", { value, writable: false });
+    return value;
+  },
+});
+
+Object.defineProperty(Settings, "Autocomplete", {
+  configurable: true,
+  get () {
+    const obj = _get()["Autocomplete"] || {};
+
+    const blacklistRegexes: RegExp[] = [];
+    for (const pattern of (obj.blacklist as string[] || [])) {
+      try {
+        blacklistRegexes.push(new RegExp(pattern, "i"));
+      } catch (e) {
+        console.error(`Invalid regex pattern in Autocomplete.blacklist: ${pattern}`, e);
+      }
+    }
+
+    const value = {
+      blacklist: blacklistRegexes,
+    };
+    Object.defineProperty(Settings, "Autocomplete", { value, writable: false });
     return value;
   },
 });

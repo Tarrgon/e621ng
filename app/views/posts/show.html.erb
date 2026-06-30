@@ -1,6 +1,6 @@
 <div id="c-posts"><div id="a-show">
   <%# Cookie value set in MobileTabs.ts %>
-  <% selected_tab = !CurrentUser.hide_comments? && cookies[:post_tab] == "1" ? "comments" : "tags" %>
+  <% selected_tab = !CurrentUser.hide_comments? && cookies[:post_tab] == "comments" ? "comments" : "tags" %>
   <div class="post-display" id="post-show-display" data-tab-state="<%= selected_tab %>">
 
     <div class="search">
@@ -9,7 +9,7 @@
     </div>
 
     <div class="sidebar">
-      <%= render "posts/partials/index/blacklist", post_id: @post.id %>
+      <%= render partial: "application/blacklist", post_id: @post.id %>
 
       <section id="tag-list">
         <%= render partial: "/posts/partials/show/sidebar/tag_list", locals: { post: @post, query: params[:q] } %>
@@ -38,7 +38,7 @@
         <h3>Related</h3>
         <%= render "posts/partials/show/sidebar/related", :post => @post %>
       </section>
-      
+
       <div class="go-up"><button type="button" class="st-button kinetic" title="Scroll to top" aria-label="Scroll to top"><%= svg_icon(:corner_right_up) %></button></div>
     </div>
 
@@ -58,7 +58,7 @@
             Adobe Flash has reached end of life, and no longer works in browsers. Please see <a href="/forum_topics/22535" rel="nofollow">this thread</a> on the forum for details on how you can continue to play this file.
             <br>Keyboard shortcuts are disabled on this page because it contains flash.
           </div>
-          <% if CurrentUser.is_janitor? %>
+          <% if CurrentUser.is_staff? %>
             <%= render "posts/partials/show/content/notices/notices", post: @post %>
           <% end %>
         </div>
@@ -90,7 +90,7 @@
           <%= render "posts/partials/show/content/children", post: @post %>
         </div>
 
-        <% if !CurrentUser.is_janitor? %>
+        <% if !CurrentUser.is_staff? %>
           <%= render "posts/partials/show/content/notices/notices", post: @post %>
         <% end %>
       </div>
@@ -224,6 +224,9 @@
       <% if CurrentUser.can_approve_posts? %>
         <%= render "post_disapprovals/detailed_rejection_dialog" %>
         <%= render "moderator/post/posts/delete_with_reason_dialog" %>
+      <% end %>
+      <% if CurrentUser.is_janitor? %>
+        <%= render "moderator/post/posts/reowner_dialog" %>
       <% end %>
     </div>
 

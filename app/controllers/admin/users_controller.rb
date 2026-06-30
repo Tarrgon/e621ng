@@ -3,7 +3,7 @@
 module Admin
   class UsersController < ApplicationController
     before_action :admin_only
-    before_action :is_bd_staff_only, only: %i[request_password_reset password_reset anonymize anonymize_confirm]
+    before_action :is_bd_staff_only, only: %i[anonymize anonymize_confirm]
     before_action :requires_reauthentication, only: %i[anonymize_confirm]
     respond_to :html, :json
 
@@ -80,10 +80,18 @@ module Admin
 
     def request_password_reset
       @user = User.find(params[:id])
+
+      if @user.is_staff? && !CurrentUser.user.is_bd_staff?
+        return redirect_to user_path(@user), alert: "Only BD staff can request password resets for staff accounts" # rubocop:disable Style/RedundantReturn
+      end
     end
 
     def password_reset
       @user = User.find(params[:id])
+
+      if @user.is_staff? && !CurrentUser.user.is_bd_staff?
+        return redirect_to user_path(@user), alert: "Only BD staff can request password resets for staff accounts"
+      end
 
       unless User.authenticate(CurrentUser.name, params[:admin][:password])
         return redirect_to request_password_reset_admin_user_path(@user), notice: "Password wrong"
@@ -126,13 +134,6 @@ module Admin
       redirect_to user_path(@user), notice: "User account '#{user_name}' deleted successfully"
     rescue UserDeletion::ValidationError => e
       redirect_to user_path(@user), alert: e.message
-    end
-
-    def clear_avatar
-      @user = User.find(params[:id])
-      @user.update!(avatar_id: nil)
-      ModAction.log(:user_avatar_clear, { user_id: @user.id })
-      redirect_to user_path(@user), notice: "User avatar cleared"
     end
 
     private
